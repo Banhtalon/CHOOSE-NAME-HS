@@ -1,6 +1,12 @@
-// 60FPS HTML5 Canvas Arcade Engine for 5 Classroom Random Picker Games
+// 60FPS HTML5 Canvas Arcade Engine for 5 Classroom Ordered Picker Games
 import { RACER_PALETTE } from './roster.js';
 import { soundFX } from './audio.js';
+import {
+  drawDetailedDuck,
+  drawChibiMarbleOrb,
+  drawDetailedKart,
+  drawChibiAstronaut
+} from './sprites.js';
 
 function cryptoRandom() {
   if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
@@ -20,7 +26,7 @@ function shuffleFair(array) {
   return copy;
 }
 
-function shortName(fullName, maxLen = 16) {
+function shortName(fullName, maxLen = 18) {
   if (fullName.length <= maxLen) return fullName;
   const parts = fullName.trim().split(/\s+/);
   if (parts.length >= 2) {
@@ -34,31 +40,31 @@ export const GAME_DEFINITIONS = [
   {
     id: 'duck-derby',
     name: 'Đua Vịt Sông Xanh',
-    subtitle: 'Đàn vịt vượt sóng, né xoáy nước và bứt tốc về vạch đích cờ caro',
+    subtitle: 'Vịt đua vượt sóng, ăn tia chớp tăng tốc để xếp thứ tự lên kiểm tra bài',
     badge: 'Đua Nước'
   },
   {
     id: 'plinko-drop',
-    name: 'Tháp Bi Ziczac',
-    subtitle: 'Bi pha lê thả từ đỉnh tháp va chạm chốt đinh tìm đường vào Phễu Vàng',
+    name: 'Tháp Bi Thú Cưng',
+    subtitle: 'Viên bi thú cưng rơi qua ma trận chốt đinh vào Phễu Vàng chọn thứ tự kiểm tra',
     badge: 'Vật Lý 2D'
   },
   {
     id: 'kart-sprint',
-    name: 'Đua Xe F1 Siêu Tốc',
-    subtitle: 'Đường đua F1 kịch tính với hộp vật phẩm Nitro và pha Slow-Motion cán đích',
+    name: 'Siêu Xe F1 Đua Hạng',
+    subtitle: 'Đường đua F1 kịch tính với hộp Nitro và pha Slow-Motion phân định thứ tự về đích',
     badge: 'Tốc Độ Cao'
   },
   {
     id: 'ufo-beam',
-    name: 'Đĩa Bay Bắt Cóc',
-    subtitle: 'Đĩa bay UFO quét tia sáng nhá hàng hồi hộp trước khi hút người được chọn',
+    name: 'Đĩa Bay Gọi Tên',
+    subtitle: 'Đĩa bay UFO quét tia sáng nhá hàng hồi hộp trước khi hút lần lượt người lên bảng',
     badge: 'Hồi Hộp'
   },
   {
     id: 'bubble-royale',
-    name: 'Bong Bóng Sinh Tồn',
-    subtitle: 'Đấu trường bong bóng né cầu gai, người trụ lại cuối cùng giành chiến thắng',
+    name: 'Đấu Trường Bong Bóng',
+    subtitle: 'Bong bóng thú cưng né cầu gai, những người trụ lại cuối cùng được xếp thứ tự lên bảng',
     badge: 'Sinh Tồn'
   }
 ];
@@ -76,9 +82,10 @@ export class ClassroomGamesEngine {
     this.state = 'idle'; // 'idle' | 'countdown' | 'running' | 'celebrating'
     this.durationSec = 9;
     this.pickCount = 1;
+    this.startingOrderOffset = 0;
 
-    this.width = 900;
-    this.height = 430;
+    this.width = 1000;
+    this.height = 580;
     this.dpr = 1;
 
     this.entities = [];
@@ -87,6 +94,7 @@ export class ClassroomGamesEngine {
     this.confetti = [];
     this.winners = [];
     this.preselectedWinners = [];
+    this.finishedOrderList = [];
 
     this.elapsed = 0;
     this.countdownVal = 3;
@@ -95,8 +103,7 @@ export class ClassroomGamesEngine {
     this.cameraX = 0;
     this.commentaryCooldown = 0;
 
-    // UFO specific state
-    this.ufo = { x: 400, y: 78, vx: 0, targetIdx: 0, phase: 'patrol', beamAlpha: 0, fakeoutCount: 0 };
+    this.ufo = { x: 400, y: 92, vx: 0, targetIdx: 0, phase: 'patrol', beamAlpha: 0 };
 
     this.handleResize = this.resize.bind(this);
     window.addEventListener('resize', this.handleResize);
@@ -106,16 +113,18 @@ export class ClassroomGamesEngine {
   }
 
   resize() {
-    const rect = this.canvas.getBoundingClientRect();
+    const parent = this.canvas.parentElement;
+    const rect = parent ? parent.getBoundingClientRect() : this.canvas.getBoundingClientRect();
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.width = Math.max(320, rect.width || 900);
-    this.height = Math.max(320, rect.height || 430);
+    this.width = Math.max(320, rect.width || 960);
+    this.height = Math.max(380, rect.height || 580);
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
-  setRoster(students) {
+  setRoster(students, currentQueueLength = 0) {
+    this.startingOrderOffset = currentQueueLength;
     this.students = students.length
       ? students
       : [{ id: 'demo', name: 'Hãy thêm học sinh', colorIndex: 0, accessory: 0 }];
@@ -132,7 +141,7 @@ export class ClassroomGamesEngine {
     this.setupIdleScene();
     const def = GAME_DEFINITIONS.find((g) => g.id === gameId);
     if (def) {
-      this.onCommentary(`Sẵn sàng: ${def.name} · Nhấn BẮT ĐẦU ĐUA để chọn học sinh!`);
+      this.onCommentary(`Sẵn sàng: ${def.name} · Nhấn QUAY CHỌN THỨ TỰ để bắt đầu!`);
     }
   }
 
@@ -140,12 +149,20 @@ export class ClassroomGamesEngine {
     const list = this.students.slice(0, 40);
     const n = Math.max(1, list.length);
     this.cameraX = 0;
+    this.finishedOrderList = [];
+
+    const topPad = 86;
+    const bottomPad = 64;
+    const usableH = Math.max(220, this.height - topPad - bottomPad);
+
+    // Spread characters cleanly across columns in idle mode so every character is large & unobstructed
+    const cols = Math.min(5, Math.max(2, Math.ceil(n / 4)));
+    const colSpan = Math.min(185, Math.max(120, (this.width - 220) / cols));
+
     this.entities = list.map((st, i) => {
       const palette = RACER_PALETTE[st.colorIndex % RACER_PALETTE.length];
-      const topPad = 76;
-      const bottomPad = 38;
-      const usableH = Math.max(160, this.height - topPad - bottomPad);
       const laneY = topPad + ((i + 0.5) / n) * usableH;
+      const col = i % cols;
 
       return {
         id: st.id,
@@ -153,8 +170,8 @@ export class ClassroomGamesEngine {
         name: shortName(st.name),
         fullName: st.name,
         palette,
-        accessory: st.accessory || i % 5,
-        x: 90 + (i % 5) * 125,
+        accessory: st.accessory !== undefined ? st.accessory : i % 5,
+        x: 110 + col * colSpan,
         y: laneY,
         baseY: laneY,
         vx: 0,
@@ -162,13 +179,13 @@ export class ClassroomGamesEngine {
         speed: 1,
         progress: 0,
         finished: false,
+        finishRank: 0,
         finishTime: Infinity,
         eliminated: false,
-        eliminatedAt: Infinity,
         boostTimer: 0,
         spinTimer: 0,
-        phaseOffset: i * 0.9,
-        radius: Math.max(13, Math.min(20, Math.floor(190 / Math.sqrt(n))))
+        phaseOffset: i * 1.1,
+        radius: Math.max(17, Math.min(24, Math.floor(210 / Math.sqrt(n))))
       };
     });
 
@@ -182,18 +199,18 @@ export class ClassroomGamesEngine {
       this.setupTrackHazards();
     }
 
-    this.onLeaderboard(this.entities.slice(0, 5).map((e) => e.fullName));
+    this.onLeaderboard(this.entities.slice(0, 4).map((e) => e.fullName));
   }
 
   setupTrackHazards() {
-    this.trackLength = 2400;
+    this.trackLength = 2700;
     this.hazards = [];
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 16; i++) {
       this.hazards.push({
-        x: 340 + i * 135 + cryptoRandom() * 60,
-        y: 84 + cryptoRandom() * (this.height - 130),
+        x: 360 + i * 140 + cryptoRandom() * 55,
+        y: 95 + cryptoRandom() * (this.height - 165),
         type: i % 2 === 0 ? 'boost' : 'hazard',
-        radius: 18,
+        radius: 22,
         phase: i * 0.7
       });
     }
@@ -202,12 +219,12 @@ export class ClassroomGamesEngine {
   setupPlinkoArena() {
     this.hazards = [];
     const rows = 6;
-    const startY = 115;
-    const endY = this.height - 86;
+    const startY = 135;
+    const endY = this.height - 105;
     const rowGap = (endY - startY) / rows;
     const cols = 9;
-    const leftPad = 110;
-    const rightPad = this.width - 110;
+    const leftPad = 120;
+    const rightPad = this.width - 120;
     const colGap = (rightPad - leftPad) / (cols - 1);
 
     for (let r = 0; r < rows; r++) {
@@ -217,7 +234,7 @@ export class ClassroomGamesEngine {
         this.hazards.push({
           x: leftPad + offset + c * colGap,
           y: startY + r * rowGap,
-          radius: 6,
+          radius: 7,
           isBumper: (r === 2 || r === 4) && c % 3 === 1,
           hitTimer: 0
         });
@@ -225,105 +242,108 @@ export class ClassroomGamesEngine {
     }
 
     this.entities.forEach((e, idx) => {
-      e.x = this.width * 0.5 + ((idx % 7) - 3) * 26;
-      e.y = 66 + Math.floor(idx / 7) * 14;
-      e.vx = (cryptoRandom() - 0.5) * 40;
+      e.x = this.width * 0.5 + ((idx % 7) - 3) * 44;
+      e.y = 76 + Math.floor(idx / 7) * 24;
+      e.vx = (cryptoRandom() - 0.5) * 45;
       e.vy = 0;
-      e.radius = 12;
+      e.radius = 17;
     });
   }
 
   setupUfoArena() {
     const n = this.entities.length;
-    const leftPad = 85;
-    const usableW = Math.max(240, this.width - 170);
+    const leftPad = 95;
+    const usableW = Math.max(260, this.width - 190);
     this.entities.forEach((e, i) => {
       e.x = leftPad + ((i + 0.5) / Math.max(1, n)) * usableW;
       e.baseX = e.x;
-      e.y = this.height - 62 - (i % 2) * 22;
+      e.y = this.height - 86 - (i % 2) * 32;
       e.baseY = e.y;
-      e.abductProgress = 0;
     });
     this.ufo = {
       x: this.width * 0.5,
-      y: 84,
+      y: 96,
       targetIdx: 0,
       phase: 'patrol',
-      beamAlpha: 0.25,
-      spotlightWidth: 54
+      beamAlpha: 0.3
     };
   }
 
   setupBubbleArena() {
     const cx = this.width * 0.5;
-    const cy = this.height * 0.54;
+    const cy = this.height * 0.52;
     this.entities.forEach((e, i) => {
       const angle = (i / Math.max(1, this.entities.length)) * Math.PI * 2;
-      const dist = 50 + (i % 3) * 42;
+      const dist = 65 + (i % 3) * 58;
       e.x = cx + Math.cos(angle) * dist;
       e.y = cy + Math.sin(angle) * (dist * 0.65);
-      const spd = 75 + cryptoRandom() * 45;
+      const spd = 85 + cryptoRandom() * 50;
       const dir = cryptoRandom() * Math.PI * 2;
       e.vx = Math.cos(dir) * spd;
       e.vy = Math.sin(dir) * spd;
-      e.radius = Math.max(16, Math.min(24, Math.floor(170 / Math.sqrt(this.entities.length))));
+      e.radius = Math.max(20, Math.min(26, Math.floor(195 / Math.sqrt(this.entities.length))));
       e.eliminated = false;
     });
 
     this.hazards = [
-      { x: 140, y: 130, vx: 135, vy: 110, radius: 18, angle: 0 },
-      { x: this.width - 140, y: this.height - 90, vx: -145, vy: -105, radius: 18, angle: 1.2 }
+      { x: 160, y: 150, vx: 155, vy: 125, radius: 22, angle: 0 },
+      { x: this.width - 160, y: this.height - 120, vx: -165, vy: -120, radius: 22, angle: 1.2 }
     ];
   }
 
-  startRound({ durationSec = 9, pickCount = 1 } = {}) {
+  startRound({ durationSec = 9, pickCount = 1, currentQueueLength = 0 } = {}) {
     if (!this.students.length) return;
+    this.startingOrderOffset = currentQueueLength;
     this.durationSec = Math.max(4, Number(durationSec) || 9);
     this.pickCount = Math.max(1, Math.min(this.students.length, Number(pickCount) || 1));
 
     this.setupIdleScene();
 
-    // Fairly pre-select the true winner(s) using cryptographic shuffle
+    // Fairly pre-select the true ordered winner(s) using cryptographic shuffle
     const fairOrder = shuffleFair(this.entities);
     this.preselectedWinners = fairOrder.slice(0, this.pickCount);
     const winnerIds = new Set(this.preselectedWinners.map((w) => w.id));
 
-    // Assign dramatic speed curves / elimination schedules so winners triumph at the climax
+    // Stagger finish times slightly for #1, #2, #3 so they cross the finish line in distinct order!
     this.entities.forEach((e, idx) => {
       if (this.currentGameId === 'duck-derby' || this.currentGameId === 'kart-sprint') {
-        e.x = 76 + (idx % 3) * 16;
+        e.x = 88 + (idx % 3) * 20;
       }
       const isWinner = winnerIds.has(e.id);
       const rankAmongWinners = this.preselectedWinners.findIndex((w) => w.id === e.id);
       e.isWinner = isWinner;
       e.winnerRank = isWinner ? rankAmongWinners : 999;
       e.scriptedFinishFactor = isWinner
-        ? 1.04 + (this.pickCount - rankAmongWinners) * 0.018
-        : 0.78 + cryptoRandom() * 0.21;
-      e.surgePhase = 1.5 + cryptoRandom() * 3.5;
+        ? 1.08 - rankAmongWinners * 0.025
+        : 0.72 + cryptoRandom() * 0.2;
+      e.surgePhase = 1.4 + cryptoRandom() * 3.5;
     });
 
-    // For Bubble Royale, schedule non-winners to pop across the duration
     if (this.currentGameId === 'bubble-royale') {
       const nonWinners = fairOrder.filter((e) => !winnerIds.has(e.id));
       nonWinners.forEach((e, idx) => {
-        const frac = (idx + 0.6) / Math.max(1, nonWinners.length);
-        e.scheduledPopTime = 1.0 + frac * (this.durationSec - 1.6);
+        const frac = (idx + 0.5) / Math.max(1, nonWinners.length);
+        e.scheduledPopTime = 0.9 + frac * (this.durationSec - 1.5);
       });
     }
 
-    // For UFO Beam, build fake-out target sequence ending on the real winner
     if (this.currentGameId === 'ufo-beam') {
       const nonWinners = fairOrder.filter((e) => !winnerIds.has(e.id));
       const fake1 = nonWinners[0] || this.preselectedWinners[0];
       const fake2 = nonWinners[1] || fake1;
-      const fake3 = nonWinners[2] || fake2;
-      this.ufoSequence = [
-        { target: fake1, until: this.durationSec * 0.28, mode: 'sweep' },
-        { target: fake2, until: this.durationSec * 0.54, mode: 'fakeout' },
-        { target: fake3, until: this.durationSec * 0.76, mode: 'fakeout' },
-        { target: this.preselectedWinners[0], until: this.durationSec * 1.05, mode: 'abduct' }
-      ];
+      this.ufoSequence = [];
+      this.ufoSequence.push({ target: fake1, until: this.durationSec * 0.25, mode: 'sweep' });
+      this.ufoSequence.push({ target: fake2, until: this.durationSec * 0.48, mode: 'fakeout' });
+
+      const remainFrac = 0.52 / Math.max(1, this.preselectedWinners.length);
+      this.preselectedWinners.forEach((w, idx) => {
+        this.ufoSequence.push({
+          target: w,
+          until: this.durationSec * (0.48 + (idx + 1) * remainFrac),
+          mode: 'abduct',
+          orderIndex: idx + 1
+        });
+      });
       this.ufoLastStep = -1;
     }
 
@@ -332,10 +352,24 @@ export class ClassroomGamesEngine {
     this.countdownTimer = 0;
     this.elapsed = 0;
     this.winners = [];
+    this.finishedOrderList = [];
     this.confetti = [];
     this.particles = [];
     soundFX.playCountdown(3);
-    this.onCommentary('Chuẩn bị xuất phát... 3!');
+    this.onCommentary('Chuẩn bị chọn thứ tự lên kiểm tra... 3!');
+  }
+
+  recordEntityFinished(entity) {
+    if (entity.finished) return;
+    entity.finished = true;
+    entity.finishTime = this.elapsed;
+    this.finishedOrderList.push(entity);
+    entity.finishRank = this.startingOrderOffset + this.finishedOrderList.length;
+    this.spawnParticles(entity.x, entity.y, '#FFD60A', 16, 140);
+    soundFX.playBoost();
+    this.onCommentary(
+      `THỨ TỰ #${entity.finishRank}: ${entity.fullName} đã được chọn lên kiểm tra!`
+    );
   }
 
   spawnParticles(x, y, color, count = 12, speed = 120) {
@@ -349,8 +383,7 @@ export class ClassroomGamesEngine {
         vy: Math.sin(a) * s,
         color,
         life: 0.45 + cryptoRandom() * 0.35,
-        maxLife: 0.8,
-        size: 3 + cryptoRandom() * 4
+        size: 3.5 + cryptoRandom() * 4
       });
     }
   }
@@ -358,15 +391,15 @@ export class ClassroomGamesEngine {
   spawnConfetti() {
     this.confetti = [];
     const colors = ['#FFD60A', '#185ADB', '#D91B42', '#14804A', '#0E7490', '#FFFFFF'];
-    for (let i = 0; i < 95; i++) {
+    for (let i = 0; i < 110; i++) {
       this.confetti.push({
         x: cryptoRandom() * this.width,
         y: -20 - cryptoRandom() * 180,
-        vx: (cryptoRandom() - 0.5) * 90,
-        vy: 110 + cryptoRandom() * 140,
+        vx: (cryptoRandom() - 0.5) * 95,
+        vy: 120 + cryptoRandom() * 150,
         rot: cryptoRandom() * Math.PI * 2,
         vrot: (cryptoRandom() - 0.5) * 8,
-        w: 7 + cryptoRandom() * 6,
+        w: 8 + cryptoRandom() * 6,
         h: 4 + cryptoRandom() * 4,
         color: colors[i % colors.length]
       });
@@ -376,11 +409,21 @@ export class ClassroomGamesEngine {
   finishRound() {
     if (this.state === 'celebrating') return;
     this.state = 'celebrating';
+
+    // Ensure all preselected winners have their finishRank assigned in order
+    this.preselectedWinners.forEach((w) => {
+      if (!w.finished) {
+        this.recordEntityFinished(w);
+      }
+    });
+
     this.winners = this.preselectedWinners.map((e) => e.student);
     this.spawnConfetti();
     soundFX.playWinFanfare();
-    const names = this.winners.map((w) => w.name).join(', ');
-    this.onCommentary(`CHÚC MỪNG CHIẾN THẮNG: ${names}!`);
+    const summary = this.preselectedWinners
+      .map((e, i) => `Số ${this.startingOrderOffset + i + 1}: ${e.fullName}`)
+      .join(' · ');
+    this.onCommentary(`HOÀN TẤT CHỌN THỨ TỰ: ${summary}!`);
     this.onRoundComplete(this.winners);
   }
 
@@ -395,7 +438,6 @@ export class ClassroomGamesEngine {
   }
 
   update(dt) {
-    // Update particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.x += p.vx * dt;
@@ -404,7 +446,6 @@ export class ClassroomGamesEngine {
       if (p.life <= 0) this.particles.splice(i, 1);
     }
 
-    // Update confetti
     for (const c of this.confetti) {
       c.x += c.vx * dt;
       c.y += c.vy * dt;
@@ -432,7 +473,7 @@ export class ClassroomGamesEngine {
           soundFX.playCountdown(0);
           this.state = 'running';
           this.elapsed = 0;
-          this.onCommentary('XUẤT PHÁT! Cuộc đua bắt đầu!');
+          this.onCommentary('XUẤT PHÁT! Đang tìm người lên bảng theo thứ tự!');
         }
       }
       return;
@@ -455,45 +496,46 @@ export class ClassroomGamesEngine {
   }
 
   updateRaceGame(dt) {
-    const startX = 90;
-    const finishX = this.trackLength - 140;
+    const startX = 88;
+    const finishX = this.trackLength - 160;
     const totalDist = finishX - startX;
     const baseSpeed = totalDist / this.durationSec;
 
-    // Slow-mo photo finish for kart-sprint when leader reaches 88%
     let maxProg = 0;
     this.entities.forEach((e) => {
       if (e.progress > maxProg) maxProg = e.progress;
     });
-    const slowMo = this.currentGameId === 'kart-sprint' && maxProg > 0.87 && maxProg < 0.995 ? 0.42 : 1;
+    const slowMo =
+      this.currentGameId === 'kart-sprint' && maxProg > 0.86 && this.finishedOrderList.length === 0
+        ? 0.45
+        : 1;
     const effDt = dt * slowMo;
-
-    const progressFrac = Math.min(1.15, this.elapsed / this.durationSec);
+    const progressFrac = Math.min(1.25, this.elapsed / this.durationSec);
 
     this.entities.forEach((e) => {
       if (e.finished) return;
 
-      // Rubber-banding + dramatic surges in first 75%, then converge to scripted fair outcome
-      const wave = Math.sin(this.elapsed * 3.4 + e.phaseOffset) * 0.28 + Math.cos(this.elapsed * 2.1 + e.surgePhase) * 0.18;
+      const wave =
+        Math.sin(this.elapsed * 3.4 + e.phaseOffset) * 0.28 +
+        Math.cos(this.elapsed * 2.1 + e.surgePhase) * 0.18;
       const earlyMultiplier = 1 + wave;
-      const lateWeight = Math.max(0, Math.min(1, (progressFrac - 0.62) / 0.32));
+      const lateWeight = Math.max(0, Math.min(1, (progressFrac - 0.58) / 0.34));
       const targetMult = earlyMultiplier * (1 - lateWeight) + e.scriptedFinishFactor * lateWeight;
 
       let boostBonus = 1;
       if (e.boostTimer > 0) {
         e.boostTimer -= effDt;
-        boostBonus = 1.42;
+        boostBonus = 1.4;
       } else if (e.spinTimer > 0) {
         e.spinTimer -= effDt;
-        boostBonus = 0.55;
+        boostBonus = 0.58;
       }
 
-      // Guarantee winning duck/kart crosses finish cleanly at durationSec
-      if (e.isWinner && progressFrac > 0.78) {
+      if (e.isWinner && progressFrac > 0.72) {
+        const targetFinishTime = this.durationSec + e.winnerRank * 0.38;
         const remainingDist = Math.max(0, finishX - e.x);
-        const remainingTime = Math.max(0.25, this.durationSec - this.elapsed + e.winnerRank * 0.18);
-        const neededSpeed = remainingDist / remainingTime;
-        e.vx = neededSpeed;
+        const remainingTime = Math.max(0.2, targetFinishTime - this.elapsed);
+        e.vx = remainingDist / remainingTime;
       } else {
         e.vx = baseSpeed * targetMult * boostBonus;
       }
@@ -501,14 +543,13 @@ export class ClassroomGamesEngine {
       e.x += e.vx * effDt;
       e.progress = Math.max(0, Math.min(1, (e.x - startX) / totalDist));
 
-      // Check interactions with track hazards/boosts
       for (const h of this.hazards) {
         const dx = e.x - h.x;
         const dy = e.y - h.y;
-        if (Math.abs(dx) < 22 && Math.abs(dy) < 20) {
+        if (Math.abs(dx) < 26 && Math.abs(dy) < 22) {
           if (h.type === 'boost' && e.boostTimer <= 0) {
             e.boostTimer = 0.65;
-            this.spawnParticles(e.x, e.y, '#FFD60A', 6, 90);
+            this.spawnParticles(e.x, e.y, '#FFD60A', 6, 95);
             if (cryptoRandom() < 0.25) soundFX.playBoost();
           } else if (h.type === 'hazard' && !e.isWinner && progressFrac > 0.5 && e.spinTimer <= 0) {
             e.spinTimer = 0.45;
@@ -517,48 +558,59 @@ export class ClassroomGamesEngine {
         }
       }
 
-      if (e.x >= finishX) {
-        e.x = finishX;
-        e.finished = true;
-        e.finishTime = this.elapsed;
+      if (e.x >= finishX && e.isWinner) {
+        // Ensure winners finish in exact rank order (0, then 1, then 2...)
+        const expectedRankIdx = this.finishedOrderList.length;
+        if (e.winnerRank === expectedRankIdx) {
+          e.x = finishX + 12;
+          this.recordEntityFinished(e);
+        } else {
+          e.x = finishX - 6 - (e.winnerRank - expectedRankIdx) * 14;
+        }
+      } else if (e.x >= finishX - 18 && !e.isWinner) {
+        e.x = finishX - 18;
       }
     });
 
-    // Sort leaderboard by X position
     const sorted = [...this.entities].sort((a, b) => b.x - a.x);
-    const leader = sorted[0];
-    this.cameraX = Math.max(0, Math.min(this.trackLength - this.width, leader.x - this.width * 0.58));
+    const activeLeader = this.entities.find((e) => !e.finished && e.isWinner) || sorted[0];
+    if (activeLeader) {
+      this.cameraX = Math.max(
+        0,
+        Math.min(this.trackLength - this.width, activeLeader.x - this.width * 0.56)
+      );
+    }
 
-    this.onLeaderboard(sorted.slice(0, 5).map((e) => e.fullName));
+    this.onLeaderboard(sorted.slice(0, 4).map((e) => e.fullName));
 
-    if (this.commentaryCooldown <= 0 && leader) {
+    if (this.commentaryCooldown <= 0 && sorted[0] && this.finishedOrderList.length === 0) {
       this.commentaryCooldown = 1.6;
-      if (slowMo < 1) {
-        this.onCommentary(`PHOTO FINISH! ${leader.fullName} đang so kè từng centimet trước vạch đích!`);
-      } else if (maxProg > 0.72) {
-        this.onCommentary(`Nước rút cuối cùng! ${leader.fullName} đang dẫn đầu đoàn đua!`);
+      if (maxProg > 0.72) {
+        this.onCommentary(`Nước rút về đích! ${sorted[0].fullName} đang dẫn đầu đoàn đua!`);
         if (this.currentGameId === 'duck-derby') soundFX.playQuack();
         else soundFX.playKartRev();
       } else {
         const second = sorted[1] ? sorted[1].fullName : '';
         this.onCommentary(
           second
-            ? `${leader.fullName} đang tạm dẫn đầu, bám sát phía sau là ${second}!`
-            : `${leader.fullName} đang bứt phá mạnh mẽ!`
+            ? `${sorted[0].fullName} đang tạm dẫn đầu, bám sát là ${second}!`
+            : `${sorted[0].fullName} đang bứt tốc!`
         );
       }
     }
 
-    const finishedWinners = this.preselectedWinners.filter((w) => w.finished);
-    if (finishedWinners.length >= this.pickCount || this.elapsed >= this.durationSec + 1.4) {
+    if (
+      this.finishedOrderList.length >= this.pickCount ||
+      this.elapsed >= this.durationSec + this.pickCount * 0.45 + 1.2
+    ) {
       this.finishRound();
     }
   }
 
   updatePlinkoGame(dt) {
     const funnelX = this.width * 0.5;
-    const funnelY = this.height - 34;
-    const gravity = 280;
+    const funnelY = this.height - 46;
+    const gravity = 290;
     const progressFrac = this.elapsed / this.durationSec;
 
     this.entities.forEach((e, idx) => {
@@ -568,71 +620,67 @@ export class ClassroomGamesEngine {
       e.x += e.vx * dt;
       e.y += e.vy * dt;
 
-      // Side walls
-      if (e.x < 70) {
-        e.x = 70;
+      if (e.x < 85) {
+        e.x = 85;
         e.vx = Math.abs(e.vx) * 0.8;
-      } else if (e.x > this.width - 70) {
-        e.x = this.width - 70;
+      } else if (e.x > this.width - 85) {
+        e.x = this.width - 85;
         e.vx = -Math.abs(e.vx) * 0.8;
       }
 
-      // Peg collisions
       this.hazards.forEach((peg, pIdx) => {
         if (peg.hitTimer > 0) peg.hitTimer = Math.max(0, peg.hitTimer - dt);
         const dx = e.x - peg.x;
         const dy = e.y - peg.y;
         const dist = Math.hypot(dx, dy);
-        const minDist = e.radius + peg.radius;
+        const minDist = e.radius + (peg.isBumper ? 12 : peg.radius);
         if (dist < minDist && dist > 0.001) {
           const nx = dx / dist;
           const ny = dy / dist;
           e.x = peg.x + nx * minDist;
           e.y = peg.y + ny * minDist;
-          const bounce = peg.isBumper ? 195 : 125;
-          e.vx = nx * bounce + (cryptoRandom() - 0.5) * 55;
+          const bounce = peg.isBumper ? 205 : 130;
+          e.vx = nx * bounce + (cryptoRandom() - 0.5) * 60;
           e.vy = -Math.abs(ny * bounce * 0.68);
-          peg.hitTimer = 0.2;
+          peg.hitTimer = 0.22;
           if (cryptoRandom() < 0.18) soundFX.playPegPing(pIdx + idx);
         }
       });
 
-      // Guide winner toward center Championship Funnel in final 28%
-      if (e.isWinner && progressFrac > 0.72) {
-        const pull = (funnelX - e.x) * 3.8;
+      const expectedRankIdx = this.finishedOrderList.length;
+      if (e.isWinner && e.winnerRank === expectedRankIdx && progressFrac > 0.68) {
+        const pull = (funnelX - e.x) * 4.2;
         e.vx += pull * dt;
-        e.vy = Math.max(e.vy, 135);
-      } else if (!e.isWinner && e.y > funnelY - 38 && Math.abs(e.x - funnelX) < 58 && progressFrac > 0.65) {
-        // Deflect non-winners slightly away from Championship Funnel so only winners enter it
-        e.vx += (e.x < funnelX ? -180 : 180) * dt;
+        e.vy = Math.max(e.vy, 145);
+      } else if (e.y > funnelY - 45 && Math.abs(e.x - funnelX) < 70) {
+        e.vx += (e.x < funnelX ? -190 : 190) * dt;
       }
 
-      // Bottom boundary: if winner enters funnel at climax, finish! Otherwise warp back to top
       if (e.y >= funnelY) {
-        if (e.isWinner && progressFrac >= 0.82 && Math.abs(e.x - funnelX) < 54) {
+        if (
+          e.isWinner &&
+          e.winnerRank === expectedRankIdx &&
+          progressFrac >= 0.75 &&
+          Math.abs(e.x - funnelX) < 64
+        ) {
           e.x = funnelX;
           e.y = funnelY;
-          e.finished = true;
-          this.spawnParticles(funnelX, funnelY, '#FFD60A', 22, 160);
+          this.recordEntityFinished(e);
         } else {
-          // Teleport back to top drop chute for another cascade
-          e.y = 54;
-          e.x = this.width * 0.5 + (cryptoRandom() - 0.5) * 160;
-          e.vy = 20;
+          e.y = 58;
+          e.x = this.width * 0.5 + (cryptoRandom() - 0.5) * 220;
+          e.vy = 25;
         }
       }
     });
 
     const sorted = [...this.entities].sort((a, b) => b.y - a.y);
-    this.onLeaderboard(sorted.slice(0, 5).map((e) => e.fullName));
+    this.onLeaderboard(sorted.slice(0, 4).map((e) => e.fullName));
 
-    if (this.commentaryCooldown <= 0 && sorted[0]) {
-      this.commentaryCooldown = 1.6;
-      this.onCommentary(`Bi của ${sorted[0].fullName} đang áp sát Phễu Vàng Vô Địch!`);
-    }
-
-    const finishedWinners = this.preselectedWinners.filter((w) => w.finished);
-    if (finishedWinners.length >= this.pickCount || this.elapsed >= this.durationSec + 0.6) {
+    if (
+      this.finishedOrderList.length >= this.pickCount ||
+      this.elapsed >= this.durationSec + this.pickCount * 0.5 + 0.8
+    ) {
       this.finishRound();
     }
   }
@@ -641,45 +689,42 @@ export class ClassroomGamesEngine {
     const seqIdx = this.ufoSequence.findIndex((s) => this.elapsed <= s.until);
     const step = this.ufoSequence[seqIdx !== -1 ? seqIdx : this.ufoSequence.length - 1];
 
-    if (seqIdx !== this.ufoLastStep) {
+    if (seqIdx !== this.ufoLastStep && step) {
       this.ufoLastStep = seqIdx;
       if (step.mode === 'sweep') {
         soundFX.playUfoSweep();
-        this.onCommentary(`Đĩa bay UFO đang quét radar trên bầu trời...`);
+        this.onCommentary('Đĩa bay UFO đang quét radar tìm học sinh lên bảng...');
       } else if (step.mode === 'fakeout') {
         soundFX.playUfoSweep();
-        this.onCommentary(`UFO đang khóa tia sáng vào ${step.target.fullName}... Phải người này không?!`);
-      } else if (step.mode === 'abduct') {
+        this.onCommentary(`UFO chiếu sáng ${step.target.fullName}... Liệu có phải người số 1?!`);
+      } else if (step.mode === 'abduct' && step.target) {
         soundFX.playUfoBeam();
-        this.onCommentary(`KÍCH HOẠT TIA TRACTOR BEAM! Đĩa bay đã chọn ${step.target.fullName}!`);
+        this.recordEntityFinished(step.target);
       }
     }
 
-    const targetX = step.target ? step.target.x : this.width * 0.5;
-    this.ufo.x += (targetX - this.ufo.x) * Math.min(1, dt * 5.2);
+    const targetX = step && step.target ? step.target.x : this.width * 0.5;
+    this.ufo.x += (targetX - this.ufo.x) * Math.min(1, dt * 5.8);
 
-    // Astronauts hop nervously on the ground
     this.entities.forEach((e, i) => {
-      if (step.mode === 'abduct' && e.id === step.target.id && Math.abs(this.ufo.x - e.x) < 28) {
-        e.y += (this.ufo.y + 24 - e.y) * dt * 3.8;
-        this.ufo.beamAlpha = 0.85;
+      if (e.finished) {
+        e.y += (this.ufo.y + 26 - e.y) * dt * 4.5;
       } else {
-        e.y = e.baseY - Math.abs(Math.sin(this.elapsed * 5 + i)) * 8;
+        e.y = e.baseY - Math.abs(Math.sin(this.elapsed * 5 + i)) * 9;
       }
     });
 
-    if (this.elapsed >= this.durationSec) {
+    if (this.elapsed >= this.durationSec + 0.3) {
       this.finishRound();
     }
   }
 
   updateBubbleGame(dt) {
-    const left = 54;
-    const right = this.width - 54;
-    const top = 68;
-    const bottom = this.height - 34;
+    const left = 65;
+    const right = this.width - 65;
+    const top = 78;
+    const bottom = this.height - 54;
 
-    // Move spiky hazards
     this.hazards.forEach((h) => {
       h.x += h.vx * dt;
       h.y += h.vy * dt;
@@ -688,7 +733,6 @@ export class ClassroomGamesEngine {
       if (h.y < top + h.radius || h.y > bottom - h.radius) h.vy *= -1;
     });
 
-    // Move bubbles and pop scheduled non-winners
     this.entities.forEach((e) => {
       if (e.eliminated) return;
 
@@ -712,14 +756,15 @@ export class ClassroomGamesEngine {
 
       if (!e.isWinner && this.elapsed >= e.scheduledPopTime) {
         e.eliminated = true;
-        this.spawnParticles(e.x, e.y, e.palette.fill, 14, 150);
+        this.spawnParticles(e.x, e.y, e.palette.fill, 15, 160);
         soundFX.playBubblePop();
-        this.onCommentary(`BỤP! Bong bóng của ${e.fullName} vừa nổ! Còn ${this.entities.filter((x) => !x.eliminated).length} bạn trụ lại!`);
+        const remain = this.entities.filter((x) => !x.eliminated).length;
+        this.onCommentary(`BỤP! Bong bóng của ${e.fullName} vừa nổ! Còn ${remain} bạn trụ lại!`);
       }
     });
 
     const survivors = this.entities.filter((e) => !e.eliminated);
-    this.onLeaderboard(survivors.slice(0, 5).map((e) => e.fullName));
+    this.onLeaderboard(survivors.slice(0, 4).map((e) => e.fullName));
 
     if (survivors.length <= this.pickCount || this.elapsed >= this.durationSec) {
       this.finishRound();
@@ -742,7 +787,6 @@ export class ClassroomGamesEngine {
       this.renderBubbleRoyale(ctx);
     }
 
-    // Particles
     for (const p of this.particles) {
       ctx.fillStyle = p.color;
       ctx.beginPath();
@@ -750,7 +794,6 @@ export class ClassroomGamesEngine {
       ctx.fill();
     }
 
-    // Confetti
     for (const c of this.confetti) {
       ctx.save();
       ctx.translate(c.x, c.y);
@@ -760,105 +803,142 @@ export class ClassroomGamesEngine {
       ctx.restore();
     }
 
+    // Live Ordered Exam Podium Strip inside Canvas when students finish
+    if (this.finishedOrderList.length > 0) {
+      this.renderCanvasOrderRibbon(ctx);
+    }
+
     // Countdown Overlay
     if (this.state === 'countdown') {
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.58)';
       ctx.fillRect(0, 0, this.width, this.height);
 
       ctx.fillStyle = '#FFD60A';
       ctx.beginPath();
-      ctx.arc(this.width * 0.5, this.height * 0.5, 58, 0, Math.PI * 2);
+      ctx.arc(this.width * 0.5, this.height * 0.5, 68, 0, Math.PI * 2);
       ctx.fill();
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 4.5;
       ctx.strokeStyle = '#0F172A';
       ctx.stroke();
 
       ctx.fillStyle = '#0F172A';
-      ctx.font = '700 54px "Baloo 2", sans-serif';
+      ctx.font = '700 62px "Baloo 2", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(String(this.countdownVal), this.width * 0.5, this.height * 0.5 + 3);
+      ctx.fillText(String(this.countdownVal), this.width * 0.5, this.height * 0.5 + 4);
     }
   }
 
-  renderNameTag(ctx, x, y, text, palette, isLeader = false) {
-    ctx.font = '600 12px "Be Vietnam Pro", sans-serif';
-    const padX = 7;
-    const textW = ctx.measureText(text).width;
+  // Draws Name Tag cleanly BELOW the character so hats & faces are 100% visible!
+  renderNameTag(ctx, x, y, text, palette, isLeader = false, finishRank = 0) {
+    const label = finishRank > 0 ? `#${finishRank} ${text}` : text;
+    ctx.font = '700 13px "Be Vietnam Pro", sans-serif';
+    const padX = 9;
+    const textW = ctx.measureText(label).width;
     const boxW = textW + padX * 2;
-    const boxH = 20;
+    const boxH = 22;
     const bx = x - boxW * 0.5;
-    const by = y - boxH;
+    const by = y;
 
-    ctx.fillStyle = isLeader ? '#FFD60A' : '#0F172A';
+    ctx.fillStyle = finishRank > 0 ? '#FFD60A' : isLeader ? '#FEF3C7' : 'rgba(15, 23, 42, 0.92)';
     ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, boxH, 5);
+    ctx.roundRect(bx, by, boxW, boxH, 6);
     ctx.fill();
 
-    ctx.strokeStyle = isLeader ? '#0F172A' : palette.fill;
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = finishRank > 0 || isLeader ? '#0F172A' : palette.fill;
+    ctx.lineWidth = 1.8;
     ctx.stroke();
 
-    ctx.fillStyle = isLeader ? '#0F172A' : '#FFFFFF';
+    ctx.fillStyle = finishRank > 0 || isLeader ? '#0F172A' : '#FFFFFF';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, x, by + boxH * 0.5 + 0.5);
+    ctx.fillText(label, x, by + boxH * 0.5 + 0.5);
+  }
+
+  renderCanvasOrderRibbon(ctx) {
+    const pad = 12;
+    const y = this.height - 46;
+    let curX = 14;
+
+    this.finishedOrderList.slice(0, 5).forEach((ent) => {
+      const text = `THỨ TỰ #${ent.finishRank}: ${ent.fullName}`;
+      ctx.font = '700 13px "Be Vietnam Pro", sans-serif';
+      const w = ctx.measureText(text).width + 24;
+
+      ctx.fillStyle = '#FFD60A';
+      ctx.strokeStyle = '#0F172A';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(curX, y, w, 32, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#0F172A';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, curX + pad, y + 16.5);
+
+      curX += w + 8;
+    });
   }
 
   renderDuckDerby(ctx) {
-    // River background
-    ctx.fillStyle = '#0A6699';
+    // Rich cerulean water
+    ctx.fillStyle = '#0A6E9E';
     ctx.fillRect(0, 0, this.width, this.height);
 
-    // River banks
+    // Lush green riverbanks with wooden dock posts
     ctx.fillStyle = '#14804A';
-    ctx.fillRect(0, 0, this.width, 56);
-    ctx.fillRect(0, this.height - 26, this.width, 26);
+    ctx.fillRect(0, 0, this.width, 62);
+    ctx.fillRect(0, this.height - 32, this.width, 32);
     ctx.fillStyle = '#D9B36C';
-    ctx.fillRect(0, 52, this.width, 8);
-    ctx.fillRect(0, this.height - 32, this.width, 8);
+    ctx.fillRect(0, 56, this.width, 9);
+    ctx.fillRect(0, this.height - 38, this.width, 8);
 
-    // Animated water wave lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-    ctx.lineWidth = 2;
-    const waveOffset = (this.cameraX * 0.6 + this.elapsed * 55) % 90;
-    for (let y = 82; y < this.height - 40; y += 44) {
-      for (let x = -waveOffset; x < this.width + 60; x += 90) {
+    // Water ripples
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
+    ctx.lineWidth = 2.2;
+    const waveOffset = (this.cameraX * 0.6 + this.elapsed * 55) % 100;
+    for (let y = 92; y < this.height - 50; y += 52) {
+      for (let x = -waveOffset; x < this.width + 60; x += 100) {
         ctx.beginPath();
-        ctx.arc(x, y, 16, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.arc(x, y, 18, 0.15 * Math.PI, 0.85 * Math.PI);
         ctx.stroke();
       }
     }
 
-    // Hazards & Boosts in River
-    const finishX = (this.trackLength || 2400) - 140;
+    // River Boost Arrows & Whirlpools
+    const finishX = (this.trackLength || 2700) - 160;
     for (const h of this.hazards) {
       const sx = h.x - this.cameraX;
-      if (sx < -40 || sx > this.width + 40) continue;
+      if (sx < -50 || sx > this.width + 50) continue;
       if (h.type === 'boost') {
         ctx.fillStyle = '#FFD60A';
+        ctx.strokeStyle = '#0F172A';
+        ctx.lineWidth = 1.8;
         ctx.beginPath();
-        ctx.moveTo(sx + 12, h.y);
-        ctx.lineTo(sx - 10, h.y - 10);
-        ctx.lineTo(sx - 4, h.y);
-        ctx.lineTo(sx - 10, h.y + 10);
+        ctx.moveTo(sx + 16, h.y);
+        ctx.lineTo(sx - 12, h.y - 12);
+        ctx.lineTo(sx - 5, h.y);
+        ctx.lineTo(sx - 12, h.y + 12);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
       } else {
         ctx.strokeStyle = '#7CE8FF';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.8;
         ctx.beginPath();
-        ctx.arc(sx, h.y, 12, this.elapsed * 4, this.elapsed * 4 + Math.PI * 1.4);
+        ctx.arc(sx, h.y, 16, this.elapsed * 4.5, this.elapsed * 4.5 + Math.PI * 1.45);
         ctx.stroke();
       }
     }
 
-    // Checkered Finish Line
+    // Finish Line Banner
     const finishScreenX = finishX - this.cameraX;
     if (finishScreenX > -40 && finishScreenX < this.width + 60) {
-      const sq = 12;
-      for (let y = 60; y < this.height - 32; y += sq) {
-        const row = Math.floor((y - 60) / sq);
+      const sq = 14;
+      for (let y = 65; y < this.height - 38; y += sq) {
+        const row = Math.floor((y - 65) / sq);
         ctx.fillStyle = row % 2 === 0 ? '#FFFFFF' : '#0F172A';
         ctx.fillRect(finishScreenX, y, sq, sq);
         ctx.fillStyle = row % 2 === 0 ? '#0F172A' : '#FFFFFF';
@@ -866,7 +946,6 @@ export class ClassroomGamesEngine {
       }
     }
 
-    // Find current leader
     let leaderId = null;
     let maxX = -1;
     this.entities.forEach((e) => {
@@ -876,76 +955,27 @@ export class ClassroomGamesEngine {
       }
     });
 
-    // Draw Ducks
-    this.entities.forEach((e) => {
+    // Sort by Y so lower ducks overlap naturally in 2.5D depth
+    const byDepth = [...this.entities].sort((a, b) => a.y - b.y);
+    byDepth.forEach((e) => {
       const sx = e.x - this.cameraX;
-      if (sx < -60 || sx > this.width + 60) return;
-      const bob = Math.sin(this.elapsed * 6 + e.phaseOffset) * 3;
+      if (sx < -80 || sx > this.width + 80) return;
+      const bob = Math.sin(this.elapsed * 5.5 + e.phaseOffset) * 3.5;
       const dy = e.y + bob;
+      const isLead = e.id === leaderId && this.state === 'running';
 
-      ctx.save();
-      ctx.translate(sx, dy);
-      if (e.spinTimer > 0) {
-        ctx.rotate(this.elapsed * 12);
-      }
+      drawDetailedDuck(ctx, sx, dy, {
+        palette: e.palette,
+        accessory: e.accessory,
+        time: this.elapsed + e.phaseOffset,
+        isBoosting: e.boostTimer > 0,
+        isSpinning: e.spinTimer > 0,
+        isLeader: isLead,
+        finishRank: e.finishRank,
+        scale: 1.38
+      });
 
-      // Turbo flame
-      if (e.boostTimer > 0) {
-        ctx.fillStyle = '#00F5D4';
-        ctx.beginPath();
-        ctx.moveTo(-14, 2);
-        ctx.lineTo(-28 - (this.elapsed * 40 % 8), -5);
-        ctx.lineTo(-28 - (this.elapsed * 40 % 8), 8);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // Duck body
-      ctx.fillStyle = e.palette.fill;
-      ctx.strokeStyle = '#0F172A';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(0, 3, 15, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      // Duck head
-      ctx.beginPath();
-      ctx.arc(10, -6, 8.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      // Beak
-      ctx.fillStyle = '#FF7B00';
-      ctx.beginPath();
-      ctx.moveTo(17, -8);
-      ctx.lineTo(25, -5);
-      ctx.lineTo(17, -2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Eye
-      ctx.fillStyle = '#0F172A';
-      ctx.beginPath();
-      ctx.arc(12, -8, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Cute Crown on Leader
-      if (e.id === leaderId && this.state === 'running') {
-        ctx.fillStyle = '#FFD60A';
-        ctx.beginPath();
-        ctx.moveTo(4, -14);
-        ctx.lineTo(6, -21);
-        ctx.lineTo(10, -16);
-        ctx.lineTo(14, -21);
-        ctx.lineTo(16, -14);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      }
-
-      ctx.restore();
-      this.renderNameTag(ctx, sx, dy - 18, e.name, e.palette, e.id === leaderId && this.state === 'running');
+      this.renderNameTag(ctx, sx, dy + 20, e.name, e.palette, isLead, e.finishRank);
     });
   }
 
@@ -953,91 +983,97 @@ export class ClassroomGamesEngine {
     ctx.fillStyle = '#0F172A';
     ctx.fillRect(0, 0, this.width, this.height);
 
-    // Side chute borders
     ctx.strokeStyle = '#334155';
     ctx.lineWidth = 4;
-    ctx.strokeRect(58, 52, this.width - 116, this.height - 64);
+    ctx.strokeRect(64, 58, this.width - 128, this.height - 76);
 
-    // Championship Golden Funnel at bottom center
     const funnelX = this.width * 0.5;
-    const funnelY = this.height - 34;
+    const funnelY = this.height - 44;
     ctx.fillStyle = '#FFD60A';
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.roundRect(funnelX - 58, funnelY - 12, 116, 26, 8);
+    ctx.roundRect(funnelX - 75, funnelY - 15, 150, 32, 10);
     ctx.fill();
+    ctx.stroke();
+
     ctx.fillStyle = '#0F172A';
-    ctx.font = '700 12px "Be Vietnam Pro", sans-serif';
+    ctx.font = '700 13px "Be Vietnam Pro", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('PHỄU VÔ ĐỊCH', funnelX, funnelY + 1);
+    ctx.fillText('PHỄU CHỌN THỨ TỰ', funnelX, funnelY + 1);
 
-    // Draw Pegs
     for (const peg of this.hazards) {
       ctx.fillStyle = peg.hitTimer > 0 ? '#FFD60A' : peg.isBumper ? '#D91B42' : '#7CE8FF';
-      ctx.beginPath();
-      ctx.arc(peg.x, peg.y, peg.isBumper ? 10 : peg.radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Draw Student Marbles
-    this.entities.forEach((e) => {
-      ctx.fillStyle = e.palette.fill;
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      ctx.arc(peg.x, peg.y, peg.isBumper ? 13 : peg.radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+    }
 
-      this.renderNameTag(ctx, e.x, e.y - e.radius - 4, e.name, e.palette, e.finished);
+    this.entities.forEach((e) => {
+      drawChibiMarbleOrb(ctx, e.x, e.y, e.radius, {
+        palette: e.palette,
+        accessory: e.accessory,
+        isWinner: e.finished
+      });
+      this.renderNameTag(ctx, e.x, e.y + e.radius + 4, e.name, e.palette, false, e.finishRank);
     });
   }
 
   renderKartSprint(ctx) {
-    // Asphalt Track
     ctx.fillStyle = '#1E293B';
     ctx.fillRect(0, 0, this.width, this.height);
 
-    // Red & White Rumble Strips
-    const stripeW = 28;
+    // Rumble curbs
+    const stripeW = 32;
     const offset = Math.floor(this.cameraX) % (stripeW * 2);
     for (let x = -offset - stripeW * 2; x < this.width + stripeW * 2; x += stripeW) {
       const isRed = Math.floor((x + offset) / stripeW) % 2 === 0;
       ctx.fillStyle = isRed ? '#D91B42' : '#FFFFFF';
-      ctx.fillRect(x, 54, stripeW, 12);
-      ctx.fillRect(x, this.height - 26, stripeW, 12);
+      ctx.fillRect(x, 58, stripeW, 14);
+      ctx.fillRect(x, this.height - 34, stripeW, 14);
     }
 
-    // Lane dividers
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.lineWidth = 2;
-    for (let y = 115; y < this.height - 40; y += 64) {
-      for (let x = -(this.cameraX % 60); x < this.width; x += 60) {
+    // Track lane lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.26)';
+    ctx.lineWidth = 2.5;
+    for (let y = 124; y < this.height - 50; y += 72) {
+      for (let x = -(this.cameraX % 70); x < this.width; x += 70) {
         ctx.beginPath();
         ctx.moveTo(x, y);
-        ctx.lineTo(x + 32, y);
+        ctx.lineTo(x + 36, y);
         ctx.stroke();
       }
     }
 
-    // Mystery Boost Pads on Track
+    // Mystery Nitro Pads
     for (const h of this.hazards) {
       const sx = h.x - this.cameraX;
-      if (sx < -40 || sx > this.width + 40) continue;
-      ctx.fillStyle = h.type === 'boost' ? '#14804A' : '#D9822B';
-      ctx.fillRect(sx - 10, h.y - 10, 20, 20);
+      if (sx < -50 || sx > this.width + 50) continue;
+      ctx.fillStyle = h.type === 'boost' ? '#14804A' : '#C98A14';
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(sx - 10, h.y - 10, 20, 20);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(sx - 13, h.y - 13, 26, 26, 5);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '700 13px "Baloo 2", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(h.type === 'boost' ? 'N' : '?', sx, h.y + 1);
     }
 
-    // Finish line
-    const finishX = (this.trackLength || 2400) - 140;
+    const finishX = (this.trackLength || 2700) - 160;
     const finishScreenX = finishX - this.cameraX;
     if (finishScreenX > -40 && finishScreenX < this.width + 60) {
-      const sq = 12;
-      for (let y = 66; y < this.height - 26; y += sq) {
-        const r = Math.floor((y - 66) / sq);
+      const sq = 14;
+      for (let y = 72; y < this.height - 34; y += sq) {
+        const r = Math.floor((y - 72) / sq);
         ctx.fillStyle = r % 2 === 0 ? '#FFFFFF' : '#0F172A';
         ctx.fillRect(finishScreenX, y, sq, sq);
         ctx.fillStyle = r % 2 === 0 ? '#0F172A' : '#FFFFFF';
@@ -1054,134 +1090,117 @@ export class ClassroomGamesEngine {
       }
     });
 
-    // Draw F1 Karts
-    this.entities.forEach((e) => {
+    const byDepth = [...this.entities].sort((a, b) => a.y - b.y);
+    byDepth.forEach((e) => {
       const sx = e.x - this.cameraX;
-      if (sx < -60 || sx > this.width + 60) return;
+      if (sx < -80 || sx > this.width + 80) return;
+      const isLead = e.id === leaderId && this.state === 'running';
 
-      ctx.save();
-      ctx.translate(sx, e.y);
+      drawDetailedKart(ctx, sx, e.y, {
+        palette: e.palette,
+        time: this.elapsed + e.phaseOffset,
+        isBoosting: e.boostTimer > 0,
+        isLeader: isLead,
+        scale: 1.38
+      });
 
-      // Nitro exhaust
-      if (e.boostTimer > 0) {
-        ctx.fillStyle = '#FFD60A';
-        ctx.beginPath();
-        ctx.moveTo(-18, -3);
-        ctx.lineTo(-34, 0);
-        ctx.lineTo(-18, 4);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // Wheels
-      ctx.fillStyle = '#0F172A';
-      ctx.fillRect(-13, -10, 8, 4);
-      ctx.fillRect(7, -10, 8, 4);
-      ctx.fillRect(-13, 6, 8, 4);
-      ctx.fillRect(7, 6, 8, 4);
-
-      // Car chassis
-      ctx.fillStyle = e.palette.fill;
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(-16, -7, 34, 14, 4);
-      ctx.fill();
-      ctx.stroke();
-
-      // Driver helmet
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
-      this.renderNameTag(ctx, sx, e.y - 14, e.name, e.palette, e.id === leaderId && this.state === 'running');
+      this.renderNameTag(ctx, sx, e.y + 17, e.name, e.palette, isLead, e.finishRank);
     });
   }
 
   renderUfoBeam(ctx) {
-    // Deep Space Backdrop
     ctx.fillStyle = '#0B132B';
     ctx.fillRect(0, 0, this.width, this.height);
 
-    // Stars
     ctx.fillStyle = '#FFFFFF';
-    for (let i = 0; i < 36; i++) {
-      const sx = (i * 97) % this.width;
-      const sy = 56 + ((i * 53) % (this.height - 140));
-      ctx.fillRect(sx, sy, 2, 2);
+    for (let i = 0; i < 45; i++) {
+      const sx = (i * 113) % this.width;
+      const sy = 58 + ((i * 61) % (this.height - 150));
+      ctx.fillRect(sx, sy, i % 3 === 0 ? 3 : 2, i % 3 === 0 ? 3 : 2);
     }
 
-    // Alien Planet Surface
+    // Alien Planet Surface with Craters
     ctx.fillStyle = '#1C2541';
-    ctx.fillRect(0, this.height - 54, this.width, 54);
+    ctx.fillRect(0, this.height - 74, this.width, 74);
     ctx.fillStyle = '#3A506B';
-    ctx.fillRect(0, this.height - 58, this.width, 6);
+    ctx.fillRect(0, this.height - 78, this.width, 7);
 
-    // Tractor Beam Cone
     const ufoX = this.ufo.x;
     const ufoY = this.ufo.y;
+
+    // Holographic Tractor Beam Cone + Energy Rings
     ctx.fillStyle = 'rgba(124, 232, 255, 0.24)';
     ctx.beginPath();
-    ctx.moveTo(ufoX - 18, ufoY + 10);
-    ctx.lineTo(ufoX - 64, this.height - 46);
-    ctx.lineTo(ufoX + 64, this.height - 46);
-    ctx.lineTo(ufoX + 18, ufoY + 10);
+    ctx.moveTo(ufoX - 24, ufoY + 12);
+    ctx.lineTo(ufoX - 82, this.height - 62);
+    ctx.lineTo(ufoX + 82, this.height - 62);
+    ctx.lineTo(ufoX + 24, ufoY + 12);
     ctx.closePath();
     ctx.fill();
 
-    // Astronaut Students
+    ctx.strokeStyle = 'rgba(124, 232, 255, 0.65)';
+    ctx.lineWidth = 2;
+    for (let r = 0; r < 3; r++) {
+      const ry = this.height - 90 - (((this.elapsed * 90 + r * 95) % 260));
+      if (ry > ufoY + 20) {
+        const rw = 26 + ((ry - ufoY) / (this.height - ufoY)) * 48;
+        ctx.beginPath();
+        ctx.ellipse(ufoX, ry, rw, 7, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // Chibi Astronauts
     this.entities.forEach((e) => {
-      const isTargeted = Math.abs(ufoX - e.x) < 32;
-      ctx.save();
-      ctx.translate(e.x, e.y);
-
-      // Suit body
-      ctx.fillStyle = e.palette.fill;
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(-9, -6, 18, 20, 6);
-      ctx.fill();
-      ctx.stroke();
-
-      // Helmet
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(0, -12, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#0F172A';
-      ctx.beginPath();
-      ctx.arc(0, -12, 5.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
-      this.renderNameTag(ctx, e.x, e.y - 26, e.name, e.palette, isTargeted);
+      const isTargeted = Math.abs(ufoX - e.x) < 38;
+      drawChibiAstronaut(ctx, e.x, e.y, {
+        palette: e.palette,
+        time: this.elapsed + e.phaseOffset,
+        isTargeted,
+        scale: 1.32
+      });
+      this.renderNameTag(ctx, e.x, e.y + 18, e.name, e.palette, isTargeted, e.finishRank);
     });
 
-    // UFO Saucer
+    // Detailed Mother-Ship UFO with Alien Pilot inside Dome
     ctx.save();
     ctx.translate(ufoX, ufoY);
-    ctx.fillStyle = '#7CE8FF';
-    ctx.beginPath();
-    ctx.arc(0, -6, 22, Math.PI, 0);
-    ctx.fill();
 
-    ctx.fillStyle = '#CBD5E1';
+    // Glass Dome
+    ctx.fillStyle = '#7CE8FF';
     ctx.strokeStyle = '#0F172A';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.ellipse(0, 2, 46, 13, 0, 0, Math.PI * 2);
+    ctx.arc(0, -6, 30, Math.PI, 0);
     ctx.fill();
     ctx.stroke();
 
-    // Saucer lights
-    const lights = [-28, -14, 0, 14, 28];
+    // Cute Green Alien Pilot inside dome
+    ctx.fillStyle = '#14804A';
+    ctx.beginPath();
+    ctx.arc(0, -14, 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0F172A';
+    ctx.beginPath();
+    ctx.ellipse(-4, -15, 2.5, 3.5, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(4, -15, 2.5, 3.5, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Metallic Saucer Hull
+    ctx.fillStyle = '#E2E8F0';
+    ctx.strokeStyle = '#0F172A';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 62, 17, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Glowing Rim Lights
+    const lights = [-42, -21, 0, 21, 42];
     lights.forEach((lx, idx) => {
-      ctx.fillStyle = idx % 2 === 0 ? '#FFD60A' : '#D91B42';
+      ctx.fillStyle = (idx + Math.floor(this.elapsed * 6)) % 2 === 0 ? '#FFD60A' : '#D91B42';
       ctx.beginPath();
-      ctx.arc(lx, 2, 3.5, 0, Math.PI * 2);
+      ctx.arc(lx, 4, 4.8, 0, Math.PI * 2);
       ctx.fill();
     });
     ctx.restore();
@@ -1191,23 +1210,22 @@ export class ClassroomGamesEngine {
     ctx.fillStyle = '#0B192C';
     ctx.fillRect(0, 0, this.width, this.height);
 
-    // Arena boundary ring
     ctx.strokeStyle = '#1E3E62';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(50, 64, this.width - 100, this.height - 92);
+    ctx.lineWidth = 3.5;
+    ctx.strokeRect(58, 70, this.width - 116, this.height - 110);
 
-    // Spiky Obstacles
+    // Spiky Boss Mines
     for (const h of this.hazards) {
       ctx.save();
       ctx.translate(h.x, h.y);
       ctx.rotate(h.angle);
       ctx.fillStyle = '#D91B42';
       ctx.strokeStyle = '#FFD60A';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.2;
       ctx.beginPath();
-      const spikes = 8;
+      const spikes = 10;
       for (let i = 0; i < spikes * 2; i++) {
-        const r = i % 2 === 0 ? h.radius + 5 : h.radius - 5;
+        const r = i % 2 === 0 ? h.radius + 7 : h.radius - 5;
         const a = (i / (spikes * 2)) * Math.PI * 2;
         if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
         else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
@@ -1215,32 +1233,45 @@ export class ClassroomGamesEngine {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+
+      ctx.fillStyle = '#FFD60A';
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
-    // Student Bubbles
+    // Cute Chibi Pets Floating Inside Translucent Bubbles
     const survivors = this.entities.filter((e) => !e.eliminated);
     survivors.forEach((e) => {
       const isLast = survivors.length <= this.pickCount && this.state !== 'idle';
+
+      // Draw Chibi Pet inside the bubble
+      drawChibiMarbleOrb(ctx, e.x, e.y, e.radius * 0.72, {
+        palette: e.palette,
+        accessory: e.accessory,
+        isWinner: isLast
+      });
+
+      // Outer Translucent Soap/Energy Bubble Ring
       ctx.save();
       ctx.translate(e.x, e.y);
-
-      ctx.fillStyle = e.palette.fill;
-      ctx.strokeStyle = isLast ? '#FFD60A' : '#FFFFFF';
-      ctx.lineWidth = isLast ? 4 : 2;
+      ctx.fillStyle = 'rgba(124, 232, 255, 0.16)';
+      ctx.strokeStyle = isLast ? '#FFD60A' : '#7CE8FF';
+      ctx.lineWidth = isLast ? 4 : 2.2;
       ctx.beginPath();
       ctx.arc(0, 0, e.radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
-      // Bubble shine dot
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+      // Bubble Specular Highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
       ctx.beginPath();
-      ctx.arc(-e.radius * 0.35, -e.radius * 0.35, e.radius * 0.22, 0, Math.PI * 2);
+      ctx.ellipse(-e.radius * 0.38, -e.radius * 0.38, e.radius * 0.25, e.radius * 0.13, -0.6, 0, Math.PI * 2);
       ctx.fill();
-
       ctx.restore();
-      this.renderNameTag(ctx, e.x, e.y - e.radius - 4, e.name, e.palette, isLast);
+
+      this.renderNameTag(ctx, e.x, e.y + e.radius + 5, e.name, e.palette, isLast, e.finishRank);
     });
   }
 }

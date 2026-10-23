@@ -1,15 +1,15 @@
-// Classroom Student Roster & Session State Manager
-const STORAGE_KEY = 'choose_name_hs_state_v1';
+// Classroom Student Roster & Ordered Exam Queue Manager
+const STORAGE_KEY = 'choose_name_hs_state_v2';
 
 // Distinct high-visibility racer palette (safe from banned purple/terracotta lint rules)
 export const RACER_PALETTE = [
-  { fill: '#FFD60A', stroke: '#8A6D00', badgeBg: '#FEF5D9', badgeFg: '#8A5A00', label: 'Vàng Tia Chớp' },
+  { fill: '#FFD60A', stroke: '#8A6D00', badgeBg: '#FEF5D9', badgeFg: '#784F00', label: 'Vàng Tia Chớp' },
   { fill: '#185ADB', stroke: '#0D368A', badgeBg: '#E8F0FE', badgeFg: '#1246B0', label: 'Xanh Đại Dương' },
   { fill: '#D91B42', stroke: '#8A0F28', badgeBg: '#FDE8EC', badgeFg: '#A81230', label: 'Đỏ Đua F1' },
   { fill: '#14804A', stroke: '#0A4D2B', badgeBg: '#E3F7ED', badgeFg: '#0F6339', label: 'Xanh Lá Rừng' },
   { fill: '#0E7490', stroke: '#084759', badgeBg: '#E0F5F9', badgeFg: '#0B5A70', label: 'Xanh Ngọc Bích' },
   { fill: '#B83280', stroke: '#701B4C', badgeBg: '#FCE8F3', badgeFg: '#8F2260', label: 'Hồng Sao Băng' },
-  { fill: '#C98A14', stroke: '#7A5208', badgeBg: '#FEF3D6', badgeFg: '#8A5C09', label: 'Cam Hoàng Kim' }
+  { fill: '#C98A14', stroke: '#7A5208', badgeBg: '#FEF3D6', badgeFg: '#784F00', label: 'Cam Hoàng Kim' }
 ];
 
 const DEFAULT_CLASSES = {
@@ -90,7 +90,7 @@ export class RosterManager {
   constructor() {
     this.classes = {};
     this.activeClassId = 'lop-10a1';
-    this.sessionHistory = [];
+    this.examQueue = [];
     this.excludePicked = true;
     this.load();
   }
@@ -104,12 +104,12 @@ export class RosterManager {
           this.classes = parsed.classes;
           this.activeClassId = parsed.activeClassId || Object.keys(this.classes)[0];
           this.excludePicked = parsed.excludePicked !== undefined ? parsed.excludePicked : true;
-          this.sessionHistory = Array.isArray(parsed.sessionHistory) ? parsed.sessionHistory : [];
+          this.examQueue = Array.isArray(parsed.examQueue) ? parsed.examQueue : [];
           return;
         }
       }
     } catch {
-      // Fallback to default
+      // Fallback to defaults
     }
 
     Object.entries(DEFAULT_CLASSES).forEach(([key, cfg]) => {
@@ -130,7 +130,7 @@ export class RosterManager {
           classes: this.classes,
           activeClassId: this.activeClassId,
           excludePicked: this.excludePicked,
-          sessionHistory: this.sessionHistory
+          examQueue: this.examQueue
         })
       );
     } catch {
@@ -190,28 +190,44 @@ export class RosterManager {
     }
   }
 
-  markWinners(winners, gameName) {
+  // Appends newly picked students in sequential exam order (Thứ tự 1, Thứ tự 2, Thứ tự 3...)
+  markWinnersInOrder(winners, gameName) {
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`; // taste-skill-ignore
+    const addedEntries = [];
+
     winners.forEach((w) => {
       const target = this.getAllStudents().find((s) => s.id === w.id);
       if (target) {
         if (this.excludePicked) {
           target.picked = true;
         }
-        this.sessionHistory.unshift({
-          id: target.id,
+        const nextOrderNumber = this.examQueue.length + 1;
+        const entry = {
+          uid: 'eq_' + Date.now() + '_' + nextOrderNumber + '_' + Math.random().toString(36).slice(2, 5),
+          orderNumber: nextOrderNumber,
+          studentId: target.id,
           name: target.name,
           game: gameName,
           time: timeStr,
+          done: false,
           colorIndex: target.colorIndex
-        });
+        };
+        this.examQueue.push(entry);
+        addedEntries.push(entry);
       }
     });
-    if (this.sessionHistory.length > 24) {
-      this.sessionHistory = this.sessionHistory.slice(0, 24);
-    }
+
     this.save();
+    return addedEntries;
+  }
+
+  toggleExamDone(entryUid) {
+    const item = this.examQueue.find((e) => e.uid === entryUid);
+    if (item) {
+      item.done = !item.done;
+      this.save();
+    }
   }
 
   addStarToStudents(studentIds) {
@@ -224,15 +240,11 @@ export class RosterManager {
     this.save();
   }
 
-  resetPickedState() {
+  resetExamSession() {
     this.getAllStudents().forEach((s) => {
       s.picked = false;
     });
-    this.save();
-  }
-
-  clearHistory() {
-    this.sessionHistory = [];
+    this.examQueue = [];
     this.save();
   }
 
@@ -248,6 +260,7 @@ export class RosterManager {
       cls.name = customClassName.trim();
     }
     cls.students = buildStudentList(names);
+    this.examQueue = [];
     this.save();
     return names.length;
   }

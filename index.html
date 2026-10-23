@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CHOOSE-NAME-HS · Đấu Trường Chọn Học Sinh Ngẫu Nhiên</title>
+    <title>CHOOSE-NAME-HS · Chọn Thứ Tự Học Sinh Lên Kiểm Tra</title>
     <meta
       name="description"
-      content="Ứng dụng chọn học sinh ngẫu nhiên cho lớp học với 5 trò chơi hoạt ảnh tự chạy: Đua Vịt, Tháp Bi Ziczac, Đua Xe F1, Đĩa Bay Bắt Cóc và Bong Bóng Sinh Tồn."
+      content="Ứng dụng chọn học sinh theo thứ tự lên bảng kiểm tra với 5 trò chơi hoạt ảnh tự chạy: Đua Vịt, Tháp Bi Thú Cưng, Siêu Xe F1, Đĩa Bay Gọi Tên và Đấu Trường Bong Bóng."
     />
     <link rel="stylesheet" href="./styles/main.css" />
   </head>
@@ -21,7 +21,6 @@
             </svg>
           </div>
           <span class="brand-title">CHOOSE-NAME-HS</span>
-          <span class="scope-pill">Trạm Quay Số Lớp Học</span>
         </div>
 
         <!-- 5 Game Switcher Tabs -->
@@ -52,7 +51,7 @@
               <circle cx="16" cy="12" r="2" />
               <path d="M7 19h10" />
             </svg>
-            <span>Tháp Bi Ziczac</span>
+            <span>Tháp Bi Thú Cưng</span>
           </button>
 
           <button
@@ -65,7 +64,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8Z" />
             </svg>
-            <span>Đua Xe F1</span>
+            <span>Siêu Xe F1</span>
           </button>
 
           <button
@@ -80,7 +79,7 @@
               <path d="M8 9a4 4 0 0 1 8 0" />
               <path d="M9 15l-2 5M15 15l2 5" />
             </svg>
-            <span>Đĩa Bay Bắt Cóc</span>
+            <span>Đĩa Bay Gọi Tên</span>
           </button>
 
           <button
@@ -94,105 +93,58 @@
               <circle cx="12" cy="12" r="8" />
               <circle cx="9.5" cy="9.5" r="1.5" />
             </svg>
-            <span>Bong Bóng Sinh Tồn</span>
+            <span>Đấu Trường Bong Bóng</span>
           </button>
         </nav>
 
         <!-- Utility Buttons -->
         <div class="topbar-actions">
+          <button type="button" class="icon-btn" id="theaterToggleBtn" aria-label="Mở rộng khung chơi tối đa">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M9 4v16" />
+            </svg>
+            <span id="theaterToggleLabel">Rộng sân khấu</span>
+          </button>
+
           <button type="button" class="icon-btn" id="soundToggleBtn" aria-label="Bật hoặc tắt âm thanh">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M11 5L6 9H2v6h4l5 4V5Z" />
               <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
             </svg>
-            <span id="soundToggleLabel">Âm thanh: BẬT</span>
+            <span id="soundToggleLabel">Âm thanh</span>
           </button>
 
           <button type="button" class="icon-btn" id="fullscreenBtn" aria-label="Toàn màn hình máy chiếu">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
             </svg>
-            <span>Toàn màn hình</span>
+            <span>Phóng to</span>
           </button>
         </div>
       </header>
 
-      <!-- Main Framed Sheet -->
-      <main class="workspace-sheet">
-        <!-- Left Roster Sidebar -->
-        <aside class="roster-sidebar" aria-label="Quản lý danh sách học sinh">
-          <div class="panel-header">
-            <h2 class="panel-title">Danh Sách Lớp Học</h2>
-            <button type="button" class="small-btn" id="openImportBtn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-              </svg>
-              <span>Nhập nhanh</span>
-            </button>
-          </div>
-
-          <div class="class-select-row">
-            <label for="classSelect" class="sr-only" style="position:absolute;clip:rect(0,0,0,0)">Chọn lớp học</label>
-            <select id="classSelect" class="select-control" aria-label="Chọn lớp học"></select>
-          </div>
-
-          <form class="quick-add-form" id="quickAddForm">
-            <label for="quickAddInput" style="position:absolute;clip:rect(0,0,0,0)">Thêm tên học sinh</label>
-            <input
-              type="text"
-              id="quickAddInput"
-              class="text-input"
-              placeholder="Thêm tên học sinh mới..."
-              autocomplete="off"
-            />
-            <button type="submit" class="add-btn">Thêm</button>
-          </form>
-
-          <!-- KPI Strip -->
-          <div class="roster-stats" role="region" aria-label="Thống kê sĩ số">
-            <div class="stat-cell">
-              <span class="stat-label">Sĩ số lớp</span>
-              <span class="stat-value" id="statTotal">20</span>
-            </div>
-            <div class="stat-cell">
-              <span class="stat-label">Sẵn sàng đua</span>
-              <span class="stat-value is-accent" id="statReady">20</span>
-            </div>
-            <div class="stat-cell">
-              <span class="stat-label">Đã được gọi</span>
-              <span class="stat-value" id="statPicked">0</span>
-            </div>
-          </div>
-
-          <!-- Student Scroll List -->
-          <div class="student-list-wrap" id="studentList" role="list" aria-label="Danh sách học sinh trong lớp"></div>
-
-          <div class="roster-footer-actions">
-            <button type="button" class="small-btn" id="resetPickedBtn">Khôi phục lượt gọi</button>
-            <button type="button" class="small-btn" id="clearHistoryBtn">Xóa lịch sử</button>
-          </div>
-        </aside>
-
-        <!-- Right Game Stage Column -->
-        <section class="stage-column" aria-label="Sân khấu trò chơi chọn học sinh">
+      <!-- Main Framed Sheet: Giant Game Stage on Left + Exam Order Board on Right -->
+      <main class="workspace-sheet" id="workspaceSheet">
+        <!-- Left Giant Game Stage Column -->
+        <section class="stage-column" aria-label="Sân khấu trò chơi chọn thứ tự học sinh">
           <div class="stage-header-bar">
             <div class="stage-title-group">
               <h1 class="stage-h1" id="stageTitle">Đua Vịt Sông Xanh</h1>
               <p class="stage-subtitle" id="stageSubtitle">
-                Đàn vịt vượt sóng, né xoáy nước và bứt tốc về vạch đích cờ caro
+                Vịt đua vượt sóng, ăn tia chớp tăng tốc để xếp thứ tự lên kiểm tra bài
               </p>
             </div>
 
             <div class="stage-controls-cluster">
               <div class="control-group">
-                <label for="pickModeSelect" class="control-label">Chế độ chọn:</label>
+                <label for="pickModeSelect" class="control-label">Chế độ xếp thứ tự:</label>
                 <select id="pickModeSelect" class="control-select">
-                  <option value="single">Chọn 1 Học sinh</option>
-                  <option value="seq-2">Đua liên tiếp 2 người (Từng lượt)</option>
-                  <option value="seq-3">Đua liên tiếp 3 người (Từng lượt)</option>
-                  <option value="seq-5">Đua liên tiếp 5 người (Từng lượt)</option>
-                  <option value="top-3">Lấy Top 3 về đích cùng lúc</option>
+                  <option value="single">Chọn thêm 1 người vào Thứ Tự Kiểm Tra</option>
+                  <option value="order-3" selected>Xếp Thứ Tự 3 Người (Số 1 - Số 2 - Số 3)</option>
+                  <option value="order-5">Xếp Thứ Tự 5 Người (Số 1 đến Số 5)</option>
+                  <option value="seq-3">Đua 3 Ván Liên Tiếp (Chọn lần lượt 3 người)</option>
+                  <option value="order-10">Xếp Thứ Tự 10 Người Lên Kiểm Tra</option>
                 </select>
               </div>
 
@@ -205,71 +157,153 @@
                 </select>
               </div>
 
-              <button type="button" class="toggle-chip is-on" id="excludeToggleBtn" aria-pressed="true">
-                <span>Loại trừ người đã gọi: BẬT</span>
-              </button>
-
               <button type="button" class="play-cta-btn" id="playRaceBtn">
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M8 5v14l11-7L8 5Z" />
                 </svg>
-                <span id="playRaceBtnLabel">BẮT ĐẦU ĐUA</span>
+                <span id="playRaceBtnLabel">QUAY CHỌN THỨ TỰ</span>
               </button>
             </div>
           </div>
 
-          <!-- HTML5 Canvas Game Arena -->
-          <div class="arena-well">
-            <canvas id="gameCanvas" width="920" height="430"></canvas>
+          <!-- Giant HTML5 Canvas Game Arena -->
+          <div class="arena-well" id="arenaWell">
+            <canvas id="gameCanvas" width="1040" height="580"></canvas>
 
             <div class="arena-hud-top">
               <div class="hud-pill">
                 <span class="hud-live-dot" aria-hidden="true"></span>
-                <span id="hudPoolCount">20 Học sinh tham gia</span>
+                <span id="hudPoolCount">20 Học sinh chờ gọi</span>
               </div>
               <div class="hud-commentary" id="hudCommentary" aria-live="polite">
-                Sẵn sàng xuất phát · Nhấn nút BẮT ĐẦU ĐUA hoặc phím Space để chọn học sinh!
+                Sẵn sàng xuất phát · Nhấn QUAY CHỌN THỨ TỰ hoặc phím Space để tìm thứ tự lên kiểm tra!
               </div>
             </div>
           </div>
 
-          <!-- Bottom Live Leaderboard & Session Picked Queue -->
-          <div class="stage-bottom-grid">
-            <div class="bottom-card">
-              <div class="panel-header">
-                <h2 class="panel-title">Bảng Dẫn Đầu Trực Tiếp</h2>
-                <span class="stat-label">Cập nhật theo thời gian thực</span>
-              </div>
+          <!-- Live Race Top Leaders Bar -->
+          <div class="live-strip-bar">
+            <div class="live-strip-label">
+              <span class="stat-label">Đang dẫn đầu đường đua:</span>
               <div class="picked-chips-list" id="liveLeadersList"></div>
             </div>
 
-            <div class="bottom-card">
-              <div class="panel-header">
-                <h2 class="panel-title">Học Sinh Vừa Được Chọn</h2>
-                <span class="stat-label">Thứ tự gọi tên trên bảng</span>
-              </div>
-              <div class="picked-chips-list" id="pickedHistoryList"></div>
-            </div>
+            <button type="button" class="toggle-chip is-on" id="excludeToggleBtn" aria-pressed="true">
+              <span>Không gọi trùng người đã lên bảng: BẬT</span>
+            </button>
           </div>
         </section>
+
+        <!-- Right Dedicated Column: BẢNG THỨ TỰ LÊN KIỂM TRA & Quản Lý Lớp -->
+        <aside class="queue-sidebar" id="queueSidebar" aria-label="Bảng thứ tự học sinh lên kiểm tra">
+          <!-- Mode Switcher Tabs: Thứ Tự Kiểm Tra vs Danh Sách Lớp -->
+          <div class="sidebar-mode-tabs" role="tablist">
+            <button
+              type="button"
+              class="sidebar-tab is-active"
+              id="tabExamQueueBtn"
+              role="tab"
+              aria-selected="true"
+            >
+              <span>Thứ Tự Kiểm Tra</span>
+              <span class="tab-count-badge" id="queueBadgeCount">0</span>
+            </button>
+            <button
+              type="button"
+              class="sidebar-tab"
+              id="tabRosterBtn"
+              role="tab"
+              aria-selected="false"
+            >
+              <span>Danh Sách Lớp</span>
+              <span class="tab-count-badge is-neutral" id="rosterBadgeCount">20</span>
+            </button>
+          </div>
+
+          <!-- VIEW 1: BẢNG THỨ TỰ LÊN KIỂM TRA (Default Visible) -->
+          <div class="sidebar-view" id="examQueueView">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Bảng Thứ Tự Lên Kiểm Tra</h2>
+                <p class="stat-label">Học sinh lên bảng theo đúng số thứ tự bên dưới</p>
+              </div>
+              <button type="button" class="small-btn" id="resetSessionBtn">Làm mới</button>
+            </div>
+
+            <!-- KPI Summary of Exam Progress -->
+            <div class="roster-stats" role="region" aria-label="Tiến độ kiểm tra">
+              <div class="stat-cell">
+                <span class="stat-label">Đã xếp thứ tự</span>
+                <span class="stat-value is-accent" id="statQueued">0</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Đã KT xong</span>
+                <span class="stat-value is-green" id="statDoneExam">0</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Chưa gọi tên</span>
+                <span class="stat-value" id="statRemaining">20</span>
+              </div>
+            </div>
+
+            <!-- Numbered Ordered List of Picked Students -->
+            <div class="exam-order-list" id="examOrderList" role="list" aria-label="Thứ tự học sinh lên kiểm tra"></div>
+
+            <div class="queue-footer-bar">
+              <button type="button" class="btn-primary" id="pickNextOneBtn" style="width:100%;justify-content:center">
+                Quay Tiếp Người Tiếp Theo (+1)
+              </button>
+            </div>
+          </div>
+
+          <!-- VIEW 2: QUẢN LÝ DANH SÁCH LỚP -->
+          <div class="sidebar-view" id="rosterManageView" hidden>
+            <div class="panel-header">
+              <h2 class="panel-title">Quản Lý Sĩ Số Lớp</h2>
+              <button type="button" class="small-btn" id="openImportBtn">Nhập từ Excel</button>
+            </div>
+
+            <div class="class-select-row">
+              <label for="classSelect" style="position:absolute;clip:rect(0,0,0,0)">Chọn lớp học</label>
+              <select id="classSelect" class="select-control" aria-label="Chọn lớp học"></select>
+            </div>
+
+            <form class="quick-add-form" id="quickAddForm">
+              <label for="quickAddInput" style="position:absolute;clip:rect(0,0,0,0)">Thêm tên học sinh</label>
+              <input
+                type="text"
+                id="quickAddInput"
+                class="text-input"
+                placeholder="Thêm tên học sinh mới..."
+                autocomplete="off"
+              />
+              <button type="submit" class="add-btn">Thêm</button>
+            </form>
+
+            <div class="student-list-wrap" id="studentList" role="list" aria-label="Danh sách học sinh trong lớp"></div>
+          </div>
+        </aside>
       </main>
     </div>
 
-    <!-- Winner Podium Modal -->
-    <div class="modal-backdrop" id="winnerModal" role="dialog" aria-modal="true" aria-labelledby="winnerNameDisplay" hidden>
+    <!-- Winner Ordered Exam Queue Modal -->
+    <div class="modal-backdrop" id="winnerModal" role="dialog" aria-modal="true" aria-labelledby="winnerModalHeading" hidden>
       <div class="modal-dialog">
         <div class="winner-banner">
-          <span class="winner-tag" id="winnerTagText">NHÀ VÔ ĐỊCH CUỘC ĐUA</span>
-          <h2 class="winner-name-display" id="winnerNameDisplay">Nguyễn Minh Anh</h2>
+          <span class="winner-tag" id="winnerTagText">KẾT QUẢ XẾP THỨ TỰ LÊN KIỂM TRA</span>
+          <h2 class="winner-name-display" id="winnerModalHeading">Thứ Tự Lên Bảng</h2>
           <p class="winner-subtext" id="winnerSubtext">
-            Học sinh này đã được đánh dấu vào danh sách Đã Gọi để lượt sau không bị trùng.
+            Các học sinh dưới đây đã được ghi vào Bảng Thứ Tự Lên Kiểm Tra:
           </p>
         </div>
+
+        <!-- Ordered Cards inside Modal -->
+        <div class="modal-order-cards" id="modalOrderCards"></div>
 
         <div class="modal-actions">
           <button type="button" class="btn-gold" id="awardStarBtn">Cộng +1 Sao Thưởng</button>
           <button type="button" class="btn-primary" id="nextRaceBtn">Quay Tiếp Lượt Mới</button>
-          <button type="button" class="btn-secondary" id="closeWinnerBtn">Đóng</button>
+          <button type="button" class="btn-secondary" id="closeWinnerBtn">Đóng & Xem Bảng Thứ Tự</button>
         </div>
       </div>
     </div>

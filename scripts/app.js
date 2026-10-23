@@ -1,26 +1,21 @@
-// Main Application Controller for CHOOSE-NAME-HS Classroom Picker
+// Main Application Controller for CHOOSE-NAME-HS Ordered Classroom Exam Picker
 import { RosterManager, RACER_PALETTE } from './roster.js';
 import { ClassroomGamesEngine, GAME_DEFINITIONS } from './gamesEngine.js';
 import { soundFX } from './audio.js';
 
 const roster = new RosterManager();
 
-// Sequential multi-pick state ("Chọn lần lượt từng người")
 let sequentialQueueTotal = 1;
-let sequentialPickedSoFar = [];
-let lastRoundWinners = [];
+let sequentialPickedEntries = [];
+let lastAddedEntries = [];
 
 const els = {
-  classSelect: document.getElementById('classSelect'),
-  openImportBtn: document.getElementById('openImportBtn'),
-  quickAddForm: document.getElementById('quickAddForm'),
-  quickAddInput: document.getElementById('quickAddInput'),
-  statTotal: document.getElementById('statTotal'),
-  statReady: document.getElementById('statReady'),
-  statPicked: document.getElementById('statPicked'),
-  studentList: document.getElementById('studentList'),
-  resetPickedBtn: document.getElementById('resetPickedBtn'),
-  clearHistoryBtn: document.getElementById('clearHistoryBtn'),
+  workspaceSheet: document.getElementById('workspaceSheet'),
+  theaterToggleBtn: document.getElementById('theaterToggleBtn'),
+  theaterToggleLabel: document.getElementById('theaterToggleLabel'),
+  soundToggleBtn: document.getElementById('soundToggleBtn'),
+  soundToggleLabel: document.getElementById('soundToggleLabel'),
+  fullscreenBtn: document.getElementById('fullscreenBtn'),
   gameTabs: document.getElementById('gameTabs'),
   stageTitle: document.getElementById('stageTitle'),
   stageSubtitle: document.getElementById('stageSubtitle'),
@@ -29,22 +24,37 @@ const els = {
   excludeToggleBtn: document.getElementById('excludeToggleBtn'),
   playRaceBtn: document.getElementById('playRaceBtn'),
   playRaceBtnLabel: document.getElementById('playRaceBtnLabel'),
-  soundToggleBtn: document.getElementById('soundToggleBtn'),
-  soundToggleLabel: document.getElementById('soundToggleLabel'),
-  fullscreenBtn: document.getElementById('fullscreenBtn'),
   hudPoolCount: document.getElementById('hudPoolCount'),
   hudCommentary: document.getElementById('hudCommentary'),
   liveLeadersList: document.getElementById('liveLeadersList'),
-  pickedHistoryList: document.getElementById('pickedHistoryList'),
-  // Winner Modal
+  // Sidebar Tabs & Views
+  tabExamQueueBtn: document.getElementById('tabExamQueueBtn'),
+  tabRosterBtn: document.getElementById('tabRosterBtn'),
+  queueBadgeCount: document.getElementById('queueBadgeCount'),
+  rosterBadgeCount: document.getElementById('rosterBadgeCount'),
+  examQueueView: document.getElementById('examQueueView'),
+  rosterManageView: document.getElementById('rosterManageView'),
+  resetSessionBtn: document.getElementById('resetSessionBtn'),
+  statQueued: document.getElementById('statQueued'),
+  statDoneExam: document.getElementById('statDoneExam'),
+  statRemaining: document.getElementById('statRemaining'),
+  examOrderList: document.getElementById('examOrderList'),
+  pickNextOneBtn: document.getElementById('pickNextOneBtn'),
+  // Roster View Controls
+  openImportBtn: document.getElementById('openImportBtn'),
+  classSelect: document.getElementById('classSelect'),
+  quickAddForm: document.getElementById('quickAddForm'),
+  quickAddInput: document.getElementById('quickAddInput'),
+  studentList: document.getElementById('studentList'),
+  // Modals
   winnerModal: document.getElementById('winnerModal'),
   winnerTagText: document.getElementById('winnerTagText'),
-  winnerNameDisplay: document.getElementById('winnerNameDisplay'),
+  winnerModalHeading: document.getElementById('winnerModalHeading'),
   winnerSubtext: document.getElementById('winnerSubtext'),
+  modalOrderCards: document.getElementById('modalOrderCards'),
   awardStarBtn: document.getElementById('awardStarBtn'),
   nextRaceBtn: document.getElementById('nextRaceBtn'),
   closeWinnerBtn: document.getElementById('closeWinnerBtn'),
-  // Import Modal
   importModal: document.getElementById('importModal'),
   importClassName: document.getElementById('importClassName'),
   importTextarea: document.getElementById('importTextarea'),
@@ -65,6 +75,16 @@ const engine = new ClassroomGamesEngine(els.canvas, {
   }
 });
 
+function switchSidebarTab(tabName) {
+  const isQueue = tabName === 'queue';
+  els.tabExamQueueBtn.classList.toggle('is-active', isQueue);
+  els.tabExamQueueBtn.setAttribute('aria-selected', String(isQueue));
+  els.tabRosterBtn.classList.toggle('is-active', !isQueue);
+  els.tabRosterBtn.setAttribute('aria-selected', String(!isQueue));
+  els.examQueueView.hidden = !isQueue;
+  els.rosterManageView.hidden = isQueue;
+}
+
 function renderClassSelector() {
   els.classSelect.innerHTML = '';
   Object.values(roster.classes).forEach((cls) => {
@@ -76,24 +96,99 @@ function renderClassSelector() {
   });
 }
 
-function renderRosterPanel() {
+function renderExamOrderQueue() {
   const all = roster.getAllStudents();
   const ready = roster.getAvailableStudents();
-  const pickedCount = all.filter((s) => s.picked).length;
+  const queue = roster.examQueue;
+  const doneCount = queue.filter((q) => q.done).length;
 
-  els.statTotal.textContent = String(all.length);
-  els.statReady.textContent = String(ready.length);
-  els.statPicked.textContent = String(pickedCount);
-  els.hudPoolCount.textContent = `${ready.length} Học sinh tham gia`;
+  els.queueBadgeCount.textContent = String(queue.length);
+  els.rosterBadgeCount.textContent = String(all.length);
+  els.statQueued.textContent = String(queue.length);
+  els.statDoneExam.textContent = String(doneCount);
+  els.statRemaining.textContent = String(ready.length);
+  els.hudPoolCount.textContent = `${ready.length} Học sinh chờ gọi`;
 
   els.excludeToggleBtn.classList.toggle('is-on', roster.excludePicked);
   els.excludeToggleBtn.setAttribute('aria-pressed', String(roster.excludePicked));
   els.excludeToggleBtn.querySelector('span').textContent = roster.excludePicked
-    ? 'Loại trừ người đã gọi: BẬT'
-    : 'Loại trừ người đã gọi: TẮT';
+    ? 'Không gọi trùng người đã lên bảng: BẬT'
+    : 'Không gọi trùng người đã lên bảng: TẮT';
 
+  els.examOrderList.innerHTML = '';
+  if (queue.length === 0) {
+    const emptyBox = document.createElement('div');
+    emptyBox.className = 'exam-empty-box';
+    emptyBox.innerHTML = `
+      <div class="exam-empty-title">Chưa có học sinh trong danh sách kiểm tra</div>
+      <p>Nhấn nút <strong>QUAY CHỌN THỨ TỰ</strong> để trò chơi tự chạy và xếp thứ tự học sinh lên bảng (Số 1, Số 2, Số 3...).</p>
+    `;
+    els.examOrderList.appendChild(emptyBox);
+    return;
+  }
+
+  // First non-done student is currently testing at the board
+  const activeTestingIndex = queue.findIndex((q) => !q.done);
+
+  queue.forEach((entry, idx) => {
+    const isCurrent = idx === activeTestingIndex;
+    const card = document.createElement('div');
+    card.className =
+      'exam-order-card' +
+      (isCurrent ? ' is-current' : '') +
+      (entry.done ? ' is-done' : '');
+
+    const left = document.createElement('div');
+    left.className = 'exam-order-left';
+
+    const rankBadge = document.createElement('span');
+    rankBadge.className = 'exam-rank-badge';
+    rankBadge.textContent = `THỨ TỰ ${entry.orderNumber}`;
+
+    const info = document.createElement('div');
+    info.className = 'exam-student-info';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'exam-student-name';
+    nameEl.textContent = entry.name;
+
+    const statusEl = document.createElement('span');
+    statusEl.className = 'exam-student-status';
+    if (entry.done) {
+      statusEl.textContent = `Đã kiểm tra xong · ${entry.game}`;
+    } else if (isCurrent) {
+      statusEl.textContent = `ĐANG LÊN BẢNG KIỂM TRA · ${entry.game}`;
+    } else if (idx === activeTestingIndex + 1) {
+      statusEl.textContent = 'Chuẩn bị lên bảng tiếp theo';
+    } else {
+      statusEl.textContent = `Chờ tới lượt (#${entry.orderNumber})`;
+    }
+
+    info.appendChild(nameEl);
+    info.appendChild(statusEl);
+    left.appendChild(rankBadge);
+    left.appendChild(info);
+
+    const doneBtn = document.createElement('button');
+    doneBtn.type = 'button';
+    doneBtn.className = 'exam-done-btn';
+    doneBtn.textContent = entry.done ? 'Hoàn tác' : 'Đã KT xong';
+    doneBtn.addEventListener('click', () => {
+      roster.toggleExamDone(entry.uid);
+      renderExamOrderQueue();
+    });
+
+    card.appendChild(left);
+    card.appendChild(doneBtn);
+    els.examOrderList.appendChild(card);
+  });
+}
+
+function renderRosterManageList() {
+  const all = roster.getAllStudents();
   els.studentList.innerHTML = '';
-  all.forEach((student) => {
+
+  all.forEach((student, idx) => {
     const palette = RACER_PALETTE[student.colorIndex % RACER_PALETTE.length];
     const row = document.createElement('div');
     row.className = 'student-row' + (student.picked ? ' is-picked' : '');
@@ -105,7 +200,7 @@ function renderRosterPanel() {
     badge.className = 'student-badge';
     badge.style.backgroundColor = palette.badgeBg;
     badge.style.color = palette.badgeFg;
-    badge.textContent = roster.getInitials(student.name);
+    badge.textContent = String(idx + 1);
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'student-name';
@@ -127,7 +222,7 @@ function renderRosterPanel() {
     const toggleBtn = document.createElement('button');
     toggleBtn.type = 'button';
     toggleBtn.className = 'row-action-btn';
-    toggleBtn.title = student.picked ? 'Đưa trở lại danh sách đua' : 'Đánh dấu đã gọi / vắng mặt';
+    toggleBtn.title = student.picked ? 'Đưa trở lại danh sách chờ' : 'Đánh dấu vắng / đã gọi';
     toggleBtn.setAttribute('aria-label', toggleBtn.title);
     toggleBtn.innerHTML = student.picked
       ? '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10l4 4 8-8"/></svg>'
@@ -156,62 +251,20 @@ function renderRosterPanel() {
     row.appendChild(meta);
     els.studentList.appendChild(row);
   });
-
-  renderPickedHistory();
-}
-
-function renderPickedHistory() {
-  els.pickedHistoryList.innerHTML = '';
-  if (!roster.sessionHistory.length) {
-    const chip = document.createElement('div');
-    chip.className = 'picked-winner-chip';
-    const tag = document.createElement('span');
-    tag.className = 'picked-order-tag';
-    tag.style.backgroundColor = '#334155';
-    tag.textContent = 'Sẵn sàng';
-    const label = document.createElement('span');
-    label.textContent = 'Nhấn BẮT ĐẦU ĐUA để gọi học sinh đầu tiên';
-    chip.appendChild(tag);
-    chip.appendChild(label);
-    els.pickedHistoryList.appendChild(chip);
-    return;
-  }
-
-  roster.sessionHistory.slice(0, 3).forEach((item, index) => {
-    const chip = document.createElement('div');
-    chip.className = 'picked-winner-chip';
-
-    const orderTag = document.createElement('span');
-    orderTag.className = 'picked-order-tag';
-    orderTag.textContent = `#${roster.sessionHistory.length - index}`;
-
-    const name = document.createElement('span');
-    name.textContent = item.name;
-
-    chip.appendChild(orderTag);
-    chip.appendChild(name);
-    els.pickedHistoryList.appendChild(chip);
-  });
 }
 
 function renderLiveLeaders(names) {
   els.liveLeadersList.innerHTML = '';
-  if (!names || !names.length) {
-    const empty = document.createElement('span');
-    empty.className = 'empty-hint';
-    empty.textContent = 'Đang chờ xuất phát...';
-    els.liveLeadersList.appendChild(empty);
-    return;
-  }
+  if (!names || !names.length) return;
 
-  names.slice(0, 2).forEach((name, idx) => {
+  names.slice(0, 3).forEach((name, idx) => {
     const chip = document.createElement('div');
     chip.className = 'picked-winner-chip';
 
     const tag = document.createElement('span');
     tag.className = 'picked-order-tag';
     tag.style.backgroundColor = idx === 0 ? '#784F00' : '#334155';
-    tag.textContent = `Hạng ${idx + 1}`;
+    tag.textContent = `Dẫn đầu ${idx + 1}`;
 
     const label = document.createElement('span');
     label.textContent = name;
@@ -225,91 +278,123 @@ function renderLiveLeaders(names) {
 function syncEngineRoster() {
   let available = roster.getAvailableStudents();
   if (available.length === 0 && roster.getAllStudents().length > 0) {
-    roster.resetPickedState();
+    roster.resetExamSession();
     available = roster.getAvailableStudents();
-    els.hudCommentary.textContent = 'Tất cả học sinh đã được gọi đủ 1 vòng! Hệ thống tự động làm mới danh sách.';
+    els.hudCommentary.textContent =
+      'Tất cả học sinh trong lớp đã được gọi đủ 1 vòng! Đã làm mới danh sách kiểm tra.';
   }
-  renderRosterPanel();
-  engine.setRoster(available);
+  renderExamOrderQueue();
+  renderRosterManageList();
+  engine.setRoster(available, roster.examQueue.length);
 }
 
 function parsePickMode() {
   const val = els.pickModeSelect.value;
   if (val.startsWith('seq-')) {
-    return { mode: 'sequential', count: Number(val.replace('seq-', '')) || 2 };
+    return { mode: 'sequential', count: Number(val.replace('seq-', '')) || 3 };
   }
-  if (val.startsWith('top-')) {
-    return { mode: 'simultaneous', count: Number(val.replace('top-', '')) || 3 };
+  if (val.startsWith('order-')) {
+    return { mode: 'ordered-batch', count: Number(val.replace('order-', '')) || 3 };
   }
   return { mode: 'single', count: 1 };
 }
 
-function triggerPlayButton() {
+function triggerPlayButton(forceCount = null) {
   if (engine.state === 'running' || engine.state === 'countdown') return;
 
-  const { mode, count } = parsePickMode();
+  const parsed = forceCount ? { mode: 'single', count: forceCount } : parsePickMode();
   const durationSec = Number(els.durationSelect.value) || 9;
 
-  if (mode === 'sequential') {
-    sequentialQueueTotal = count;
-    sequentialPickedSoFar = [];
+  if (parsed.mode === 'sequential') {
+    sequentialQueueTotal = parsed.count;
+    sequentialPickedEntries = [];
     startNextSequentialLeg(durationSec);
   } else {
     sequentialQueueTotal = 1;
-    sequentialPickedSoFar = [];
+    sequentialPickedEntries = [];
     syncEngineRoster();
     els.playRaceBtn.classList.add('is-running');
     els.playRaceBtnLabel.textContent = 'ĐANG CHẠY ĐUA...';
-    engine.startRound({ durationSec, pickCount: count });
+    engine.startRound({
+      durationSec,
+      pickCount: parsed.count,
+      currentQueueLength: roster.examQueue.length
+    });
   }
 }
 
 function startNextSequentialLeg(durationSec) {
   syncEngineRoster();
-  const legNumber = sequentialPickedSoFar.length + 1;
+  const legNumber = sequentialPickedEntries.length + 1;
   els.playRaceBtn.classList.add('is-running');
-  els.playRaceBtnLabel.textContent = `ĐANG CHỌN NGƯỜI ${legNumber}/${sequentialQueueTotal}...`;
-  engine.startRound({ durationSec, pickCount: 1 });
+  els.playRaceBtnLabel.textContent = `ĐANG CHỌN LƯỢT ${legNumber}/${sequentialQueueTotal}...`;
+  engine.startRound({
+    durationSec,
+    pickCount: 1,
+    currentQueueLength: roster.examQueue.length
+  });
 }
 
 function handleRoundWinners(winners) {
   const currentGame = GAME_DEFINITIONS.find((g) => g.id === engine.currentGameId);
   const gameTitle = currentGame ? currentGame.name : 'Trò chơi';
 
-  roster.markWinners(winners, gameTitle);
-  renderRosterPanel();
+  const newEntries = roster.markWinnersInOrder(winners, gameTitle);
+  renderExamOrderQueue();
+  renderRosterManageList();
+  switchSidebarTab('queue');
 
   if (sequentialQueueTotal > 1) {
-    sequentialPickedSoFar.push(...winners);
-    if (sequentialPickedSoFar.length < sequentialQueueTotal && roster.getAvailableStudents().length > 0) {
-      const pickedName = winners[0] ? winners[0].name : '';
-      els.hudCommentary.textContent = `Đã chọn Lượt ${sequentialPickedSoFar.length}/${sequentialQueueTotal}: ${pickedName}! Chuẩn bị đua lượt tiếp theo...`;
+    sequentialPickedEntries.push(...newEntries);
+    if (
+      sequentialPickedEntries.length < sequentialQueueTotal &&
+      roster.getAvailableStudents().length > 0
+    ) {
+      const latest = newEntries[0];
+      els.hudCommentary.textContent = `Đã xếp THỨ TỰ #${latest.orderNumber}: ${latest.name}! Đang chuẩn bị đua chọn người tiếp theo...`;
       setTimeout(() => {
         const durationSec = Math.max(5, Number(els.durationSelect.value) || 7);
         startNextSequentialLeg(durationSec);
-      }, 1900);
+      }, 1800);
       return;
     }
-    lastRoundWinners = [...sequentialPickedSoFar];
+    lastAddedEntries = [...sequentialPickedEntries];
   } else {
-    lastRoundWinners = winners;
+    lastAddedEntries = newEntries;
   }
 
   els.playRaceBtn.classList.remove('is-running');
-  els.playRaceBtnLabel.textContent = 'BẮT ĐẦU ĐUA';
-  openWinnerModal(lastRoundWinners, gameTitle);
+  els.playRaceBtnLabel.textContent = 'QUAY CHỌN THỨ TỰ';
+  openWinnerModal(lastAddedEntries, gameTitle);
 }
 
-function openWinnerModal(winners, gameTitle) {
-  const names = winners.map((w) => w.name).join(' · ');
-  els.winnerTagText.textContent =
-    winners.length > 1
-      ? `KẾT QUẢ ${winners.length} HỌC SINH ĐƯỢC CHỌN (${gameTitle.toUpperCase()})`
-      : `NHÀ VÔ ĐỊCH ${gameTitle.toUpperCase()}`;
-  els.winnerNameDisplay.textContent = names;
-  els.winnerSubtext.textContent = roster.excludePicked
-    ? 'Học sinh này đã được đánh dấu vào danh sách Đã Gọi để lượt sau không bị trùng.'
-    : 'Sẵn sàng cho câu hỏi hoặc thử thách trên bảng!';
+function openWinnerModal(entries, gameTitle) {
+  els.winnerTagText.textContent = `KẾT QUẢ TỪ TRÒ CHƠI: ${gameTitle.toUpperCase()}`;
+  els.winnerModalHeading.textContent =
+    entries.length > 1
+      ? `Đã Xếp Thứ Tự ${entries.length} Học Sinh Lên Kiểm Tra`
+      : `Thứ Tự #${entries[0]?.orderNumber || 1}: ${entries[0]?.name || ''}`;
+  els.winnerSubtext.textContent =
+    'Thứ tự học sinh lên bảng kiểm tra đã được lưu vào Bảng Thứ Tự bên phải màn hình:';
+
+  els.modalOrderCards.innerHTML = '';
+  entries.forEach((entry) => {
+    const row = document.createElement('div');
+    row.className = 'modal-order-row';
+
+    const num = document.createElement('span');
+    num.className = 'modal-order-num';
+    num.textContent = `THỨ TỰ #${entry.orderNumber}`;
+
+    const name = document.createElement('span');
+    name.className = 'modal-order-name';
+    name.textContent = entry.name;
+
+    row.appendChild(num);
+    row.appendChild(name);
+    els.modalOrderCards.appendChild(row);
+  });
+
   els.awardStarBtn.disabled = false;
   els.awardStarBtn.textContent = 'Cộng +1 Sao Thưởng';
   els.winnerModal.hidden = false;
@@ -321,6 +406,16 @@ function closeWinnerModal() {
 }
 
 // Event Listeners
+els.tabExamQueueBtn.addEventListener('click', () => switchSidebarTab('queue'));
+els.tabRosterBtn.addEventListener('click', () => switchSidebarTab('roster'));
+
+els.theaterToggleBtn.addEventListener('click', () => {
+  const isTheater = els.workspaceSheet.classList.toggle('is-theater');
+  els.theaterToggleBtn.classList.toggle('is-active', isTheater);
+  els.theaterToggleLabel.textContent = isTheater ? 'Hiện bảng thứ tự' : 'Rộng sân khấu';
+  setTimeout(() => engine.resize(), 50);
+});
+
 els.classSelect.addEventListener('change', () => {
   roster.setActiveClass(els.classSelect.value);
   syncEngineRoster();
@@ -335,15 +430,14 @@ els.quickAddForm.addEventListener('submit', (e) => {
   }
 });
 
-els.resetPickedBtn.addEventListener('click', () => {
-  roster.resetPickedState();
+els.resetSessionBtn.addEventListener('click', () => {
+  roster.resetExamSession();
   syncEngineRoster();
-  els.hudCommentary.textContent = 'Đã khôi phục toàn bộ học sinh vào danh sách sẵn sàng đua!';
+  els.hudCommentary.textContent = 'Đã làm mới Bảng Thứ Tự Kiểm Tra cho tiết học mới!';
 });
 
-els.clearHistoryBtn.addEventListener('click', () => {
-  roster.clearHistory();
-  renderPickedHistory();
+els.pickNextOneBtn.addEventListener('click', () => {
+  triggerPlayButton(1);
 });
 
 els.excludeToggleBtn.addEventListener('click', () => {
@@ -386,14 +480,13 @@ els.gameTabs.querySelectorAll('[data-game-id]').forEach((btn) => {
   });
 });
 
-// Winner Modal buttons
 els.awardStarBtn.addEventListener('click', () => {
-  if (lastRoundWinners.length) {
-    roster.addStarToStudents(lastRoundWinners.map((w) => w.id));
+  if (lastAddedEntries.length) {
+    roster.addStarToStudents(lastAddedEntries.map((e) => e.studentId));
     soundFX.playWinFanfare();
     els.awardStarBtn.disabled = true;
     els.awardStarBtn.textContent = 'Đã Cộng +1 Sao!';
-    renderRosterPanel();
+    renderRosterManageList();
   }
 });
 
@@ -406,7 +499,6 @@ els.closeWinnerBtn.addEventListener('click', () => {
   closeWinnerModal();
 });
 
-// Bulk Import Modal
 els.openImportBtn.addEventListener('click', () => {
   const cls = roster.getActiveClass();
   els.importClassName.value = cls.name;
@@ -428,7 +520,6 @@ els.saveImportBtn.addEventListener('click', () => {
   }
 });
 
-// Keyboard Shortcuts for Teacher Convenience
 window.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -447,6 +538,5 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// Initialize on load
 renderClassSelector();
 syncEngineRoster();
