@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CHOOSE-NAME-HS · Đấu Trường Chọn Học Sinh Ngẫu Nhiên</title>
+    <meta
+      name="description"
+      content="Ứng dụng chọn học sinh ngẫu nhiên cho lớp học với 5 trò chơi hoạt ảnh tự chạy: Đua Vịt, Tháp Bi Ziczac, Đua Xe F1, Đĩa Bay Bắt Cóc và Bong Bóng Sinh Tồn."
+    />
+    <link rel="stylesheet" href="./styles/main.css" />
+  </head>
+  <body>
+    <div class="app-frame">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="brand-cluster">
+          <div class="brand-mark" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M12 2L15 8L21 9L16.5 14L17.5 20L12 17L6.5 20L7.5 14L3 9L9 8L12 2Z" />
+            </svg>
+          </div>
+          <span class="brand-title">CHOOSE-NAME-HS</span>
+          <span class="scope-pill">Trạm Quay Số Lớp Học</span>
+        </div>
+
+        <!-- 5 Game Switcher Tabs -->
+        <nav class="game-tabs" id="gameTabs" role="tablist" aria-label="Chọn trò chơi ngẫu nhiên">
+          <button
+            type="button"
+            class="game-tab is-active"
+            role="tab"
+            aria-selected="true"
+            data-game-id="duck-derby"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M16 8a4 4 0 0 0-8 0c0 1.5.8 2.8 2 3.4C7 12.2 5 14.5 5 17h14c0-2.5-2-4.8-5-5.6 1.2-.6 2-1.9 2-3.4Z" />
+            </svg>
+            <span>Đua Vịt Sông Xanh</span>
+          </button>
+
+          <button
+            type="button"
+            class="game-tab"
+            role="tab"
+            aria-selected="false"
+            data-game-id="plinko-drop"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="5" r="2.5" />
+              <circle cx="8" cy="12" r="2" />
+              <circle cx="16" cy="12" r="2" />
+              <path d="M7 19h10" />
+            </svg>
+            <span>Tháp Bi Ziczac</span>
+          </button>
+
+          <button
+            type="button"
+            class="game-tab"
+            role="tab"
+            aria-selected="false"
+            data-game-id="kart-sprint"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8Z" />
+            </svg>
+            <span>Đua Xe F1</span>
+          </button>
+
+          <button
+            type="button"
+            class="game-tab"
+            role="tab"
+            aria-selected="false"
+            data-game-id="ufo-beam"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <ellipse cx="12" cy="11" rx="9" ry="4" />
+              <path d="M8 9a4 4 0 0 1 8 0" />
+              <path d="M9 15l-2 5M15 15l2 5" />
+            </svg>
+            <span>Đĩa Bay Bắt Cóc</span>
+          </button>
+
+          <button
+            type="button"
+            class="game-tab"
+            role="tab"
+            aria-selected="false"
+            data-game-id="bubble-royale"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" />
+              <circle cx="9.5" cy="9.5" r="1.5" />
+            </svg>
+            <span>Bong Bóng Sinh Tồn</span>
+          </button>
+        </nav>
+
+        <!-- Utility Buttons -->
+        <div class="topbar-actions">
+          <button type="button" class="icon-btn" id="soundToggleBtn" aria-label="Bật hoặc tắt âm thanh">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M11 5L6 9H2v6h4l5 4V5Z" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+            </svg>
+            <span id="soundToggleLabel">Âm thanh: BẬT</span>
+          </button>
+
+          <button type="button" class="icon-btn" id="fullscreenBtn" aria-label="Toàn màn hình máy chiếu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            </svg>
+            <span>Toàn màn hình</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Framed Sheet -->
+      <main class="workspace-sheet">
+        <!-- Left Roster Sidebar -->
+        <aside class="roster-sidebar" aria-label="Quản lý danh sách học sinh">
+          <div class="panel-header">
+            <h2 class="panel-title">Danh Sách Lớp Học</h2>
+            <button type="button" class="small-btn" id="openImportBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+              </svg>
+              <span>Nhập nhanh</span>
+            </button>
+          </div>
+
+          <div class="class-select-row">
+            <label for="classSelect" class="sr-only" style="position:absolute;clip:rect(0,0,0,0)">Chọn lớp học</label>
+            <select id="classSelect" class="select-control" aria-label="Chọn lớp học"></select>
+          </div>
+
+          <form class="quick-add-form" id="quickAddForm">
+            <label for="quickAddInput" style="position:absolute;clip:rect(0,0,0,0)">Thêm tên học sinh</label>
+            <input
+              type="text"
+              id="quickAddInput"
+              class="text-input"
+              placeholder="Thêm tên học sinh mới..."
+              autocomplete="off"
+            />
+            <button type="submit" class="add-btn">Thêm</button>
+          </form>
+
+          <!-- KPI Strip -->
+          <div class="roster-stats" role="region" aria-label="Thống kê sĩ số">
+            <div class="stat-cell">
+              <span class="stat-label">Sĩ số lớp</span>
+              <span class="stat-value" id="statTotal">20</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-label">Sẵn sàng đua</span>
+              <span class="stat-value is-accent" id="statReady">20</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-label">Đã được gọi</span>
+              <span class="stat-value" id="statPicked">0</span>
+            </div>
+          </div>
+
+          <!-- Student Scroll List -->
+          <div class="student-list-wrap" id="studentList" role="list" aria-label="Danh sách học sinh trong lớp"></div>
+
+          <div class="roster-footer-actions">
+            <button type="button" class="small-btn" id="resetPickedBtn">Khôi phục lượt gọi</button>
+            <button type="button" class="small-btn" id="clearHistoryBtn">Xóa lịch sử</button>
+          </div>
+        </aside>
+
+        <!-- Right Game Stage Column -->
+        <section class="stage-column" aria-label="Sân khấu trò chơi chọn học sinh">
+          <div class="stage-header-bar">
+            <div class="stage-title-group">
+              <h1 class="stage-h1" id="stageTitle">Đua Vịt Sông Xanh</h1>
+              <p class="stage-subtitle" id="stageSubtitle">
+                Đàn vịt vượt sóng, né xoáy nước và bứt tốc về vạch đích cờ caro
+              </p>
+            </div>
+
+            <div class="stage-controls-cluster">
+              <div class="control-group">
+                <label for="pickModeSelect" class="control-label">Chế độ chọn:</label>
+                <select id="pickModeSelect" class="control-select">
+                  <option value="single">Chọn 1 Học sinh</option>
+                  <option value="seq-2">Đua liên tiếp 2 người (Từng lượt)</option>
+                  <option value="seq-3">Đua liên tiếp 3 người (Từng lượt)</option>
+                  <option value="seq-5">Đua liên tiếp 5 người (Từng lượt)</option>
+                  <option value="top-3">Lấy Top 3 về đích cùng lúc</option>
+                </select>
+              </div>
+
+              <div class="control-group">
+                <label for="durationSelect" class="control-label">Thời gian:</label>
+                <select id="durationSelect" class="control-select">
+                  <option value="6">6 giây (Nhanh)</option>
+                  <option value="9" selected>9 giây (Tiêu chuẩn)</option>
+                  <option value="13">13 giây (Kịch tính)</option>
+                </select>
+              </div>
+
+              <button type="button" class="toggle-chip is-on" id="excludeToggleBtn" aria-pressed="true">
+                <span>Loại trừ người đã gọi: BẬT</span>
+              </button>
+
+              <button type="button" class="play-cta-btn" id="playRaceBtn">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M8 5v14l11-7L8 5Z" />
+                </svg>
+                <span id="playRaceBtnLabel">BẮT ĐẦU ĐUA</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- HTML5 Canvas Game Arena -->
+          <div class="arena-well">
+            <canvas id="gameCanvas" width="920" height="430"></canvas>
+
+            <div class="arena-hud-top">
+              <div class="hud-pill">
+                <span class="hud-live-dot" aria-hidden="true"></span>
+                <span id="hudPoolCount">20 Học sinh tham gia</span>
+              </div>
+              <div class="hud-commentary" id="hudCommentary" aria-live="polite">
+                Sẵn sàng xuất phát · Nhấn nút BẮT ĐẦU ĐUA hoặc phím Space để chọn học sinh!
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Live Leaderboard & Session Picked Queue -->
+          <div class="stage-bottom-grid">
+            <div class="bottom-card">
+              <div class="panel-header">
+                <h2 class="panel-title">Bảng Dẫn Đầu Trực Tiếp</h2>
+                <span class="stat-label">Cập nhật theo thời gian thực</span>
+              </div>
+              <div class="picked-chips-list" id="liveLeadersList"></div>
+            </div>
+
+            <div class="bottom-card">
+              <div class="panel-header">
+                <h2 class="panel-title">Học Sinh Vừa Được Chọn</h2>
+                <span class="stat-label">Thứ tự gọi tên trên bảng</span>
+              </div>
+              <div class="picked-chips-list" id="pickedHistoryList"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Winner Podium Modal -->
+    <div class="modal-backdrop" id="winnerModal" role="dialog" aria-modal="true" aria-labelledby="winnerNameDisplay" hidden>
+      <div class="modal-dialog">
+        <div class="winner-banner">
+          <span class="winner-tag" id="winnerTagText">NHÀ VÔ ĐỊCH CUỘC ĐUA</span>
+          <h2 class="winner-name-display" id="winnerNameDisplay">Nguyễn Minh Anh</h2>
+          <p class="winner-subtext" id="winnerSubtext">
+            Học sinh này đã được đánh dấu vào danh sách Đã Gọi để lượt sau không bị trùng.
+          </p>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-gold" id="awardStarBtn">Cộng +1 Sao Thưởng</button>
+          <button type="button" class="btn-primary" id="nextRaceBtn">Quay Tiếp Lượt Mới</button>
+          <button type="button" class="btn-secondary" id="closeWinnerBtn">Đóng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Roster Import Modal -->
+    <div class="modal-backdrop" id="importModal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle" hidden>
+      <div class="modal-dialog">
+        <h2 class="panel-title" id="importModalTitle">Nhập Danh Sách Học Sinh Nhanh</h2>
+        <p class="stage-subtitle">
+          Dán danh sách học sinh từ Excel, Word hoặc Google Sheets (mỗi dòng 1 học sinh hoặc cách nhau bởi dấu phẩy):
+        </p>
+
+        <div>
+          <label for="importClassName" class="control-label">Tên lớp học:</label>
+          <input type="text" id="importClassName" class="text-input" style="width:100%;margin-top:6px" />
+        </div>
+
+        <div>
+          <label for="importTextarea" class="control-label">Danh sách họ tên học sinh:</label>
+          <textarea id="importTextarea" class="bulk-textarea" style="margin-top:6px"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancelImportBtn">Hủy</button>
+          <button type="button" class="btn-primary" id="saveImportBtn">Lưu Danh Sách Lớp</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./scripts/app.js"></script>
+  </body>
+</html>
